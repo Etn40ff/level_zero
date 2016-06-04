@@ -1,0 +1,17 @@
+This is the latest version of the code to compute level zero minors in affine
+type.
+
+To use this it suffices to 
+
+sage: %attach test_conjecture.py
+
+and then either 
+
+sage: test_conjecture_on_type(['B',2,1])
+
+or
+
+sage: test_conjecture_on_matrix(your_favourite_exchange_matrix_here)
+
+
+Horsepower provided by the class DoubleBruhatAlgebra
