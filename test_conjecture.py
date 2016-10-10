@@ -1,7 +1,7 @@
 from __future__ import print_function
 from tropical_cluster_algebra import TropicalClusterAlgebra
 #from cluster_algebra import ClusterAlgebra
-from root_system import RootSystem 
+from root_system import RootSystem as RootSystemDylan
 
 def test_conjecture_on_type(cartan_type):
     r"""
@@ -150,7 +150,7 @@ class DoubleBruhatAlgebra(SageObject):
         self._D *= self._D.denominator()
         
         # extended root system
-        self._rs = RootSystem(n+1,self._A,self._D)
+        self._rs = RootSystemDylan(n+1,self._A,self._D)
 
         # finite Cartan matrix
         self._A_f = self._A[1:n,1:n]
@@ -159,7 +159,7 @@ class DoubleBruhatAlgebra(SageObject):
         self._D_f = self._D[1:n,1:n]
 
         # finite root system
-        self._rs_f = RootSystem(n-1,self._A_f,self._D_f)
+        self._rs_f = RootSystemDylan(n-1,self._A_f,self._D_f)
         
         # generic element factorization 
         # elements are of the form (s,i) with s one of '-', 'h', '+' and i in range(n)
