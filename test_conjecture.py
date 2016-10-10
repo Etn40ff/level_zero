@@ -1,6 +1,6 @@
 from __future__ import print_function
 from tropical_cluster_algebra import TropicalClusterAlgebra
-from cluster_algebra import ClusterAlgebra
+#from cluster_algebra import ClusterAlgebra
 from root_system import RootSystem 
 
 def test_conjecture_on_type(cartan_type):
@@ -66,19 +66,19 @@ def test_conjecture_on_matrix(b_matrix, mutation_type=None, coxeter=None, cartan
         substitution[A.ambient().gens()[i+n]] = R._R.gen(i+n)*R._R.gen(i)*prod([R._R.gen(j)**(-max(b_matrix[j,i],0)) for j in range(n)])
         substitution[A.ambient().gens()[i+2*n]] = R._R.gen(i+2*n)*R._R.gen(i)*prod([R._R.gen(j)**(-max(b_matrix[j,i],0)) for j in range(n)])
 
-    problems = False
+    got_problems = False
     for gvect in regular_g_vectors:
         print(str(gvect) + "\tin the orbit of the finite type dominant weight " + str((0,)+tuple(R._level_zero_dominant_conjugate(R._g_to_weight(gvect)))[:b_matrix.ncols()-1]) + "\t: ", end="")
-        A.find_cluster_variable(gvect)
+        A.find_g_vector(gvect)
         variable = A.cluster_variable(gvect).lift().subs(substitution)
         minor = R.level_zero_minor(gvect)
         if variable == minor:
             print("Pass")
         else:
             print("Fail")
-            problems = True
+            got_problems = True
     print
-    return not problems
+    return not got_problems
 
 def b_matrix(A,c):
     r"""
