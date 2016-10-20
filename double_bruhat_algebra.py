@@ -37,6 +37,12 @@ class DoubleBruhatAlgebra(SageObject):
             G = DiGraph(weighted=True, loops=True)
 
         if not g:
+            if ls_path == crystal.module_generators[0]:
+                for e in path_so_far:
+                    if e[2] == 'jump' and (e[1],e[0],'jump') not in path_so_far:
+                        break
+                    G.add_edge(e)
+                self._admissible_paths_dict[crystal.module_generators[0].weight()].append(path_so_far)
             return G
 
         if not self._weight_dict:
@@ -53,8 +59,7 @@ class DoubleBruhatAlgebra(SageObject):
         wt = ls_path.weight()
 
         if cpt == 'h':
-#            G.add_edge((ls_path,ls_path,'h'))
-            return self._recursive_path_graph(new_g, ls_path, crystal, G=G, jump_history=jump_history, path_so_far=path_so_far)
+            return self._recursive_path_graph(new_g, ls_path, crystal, G=G, jump_history=jump_history, path_so_far=path_so_far+[(ls_path,ls_path,'h')])
         elif cpt == '-':
             step = lambda v,i: v.f(i)
             step_op = lambda v,i: v.e(i)
@@ -102,21 +107,29 @@ class DoubleBruhatAlgebra(SageObject):
             current_k = k(v,i)
             for j in range(current_k+1):
                 if v == ls_path:
-                    G = self._recursive_path_graph(new_g, new_ls_path, crystal, G=G, jump_history=jump_history, path_so_far=path_so_far+[new_ls_path])
+                    if j == 0:
+                        new_edge = []
+                    else:
+                        new_edge = [(v,new_ls_path,(cpt,i,j))]
+                    G = self._recursive_path_graph(new_g, new_ls_path, crystal, G=G, jump_history=jump_history, path_so_far=path_so_far+new_edge)
                 elif j > 0:
                     new_jump_history = copy(jump_history)
                     if v not in new_jump_history:
                         new_jump_history[v] = [ls_path]
                     else:
                         new_jump_history[v].append(ls_path)
+                    path_so_far.append((ls_path,v,'jump'))
                     old_G = copy(G)
-                    G = self._recursive_path_graph(new_g, new_ls_path, crystal, G=G, jump_history=new_jump_history, path_so_far=path_so_far+[new_ls_path])
-                    if G != old_G and ls_path not in self._jump_locations_dict:
-                        self._jump_locations_dict[ls_path] = v
+                    G = self._recursive_path_graph(new_g, new_ls_path, crystal, G=G, jump_history=new_jump_history, path_so_far=path_so_far+[(v,new_ls_path,(cpt,i,j))])
+                    if G != old_G:
+                        if ls_path not in self._jump_locations_dict:
+                            self._jump_locations_dict[ls_path] = [v]
+                        else:
+                            self._jump_locations_dict[ls_path].append(v)
                 if j < current_k:
                     new_ls_path = step(new_ls_path, i)
 #                    if cpt == '+':
-                    G.add_edge((v,new_ls_path,(cpt,i,j+1)))
+#                    G.add_edge((v,new_ls_path,(cpt,i,j+1)))
         return G
 
     def path_graph(self, weight):
@@ -126,18 +139,19 @@ class DoubleBruhatAlgebra(SageObject):
         V = crystals.LSPaths(weight).subcrystal(max_depth=self._n**2)
         self._jump_locations_dict = dict()
         self._weight_dict = None
-        self._admissible_paths_dict[weight] = dict()
+        self._admissible_paths_dict[weight] = []
         G = self._recursive_path_graph(self._g, V.module_generators[0], V)
-        for v in self._jump_locations_dict:
-            G.add_edge((v,self._jump_locations_dict[v],'jump'))
+#        for v in self._jump_locations_dict:
+#            for w in self._jump_locations_dict[v]:
+#                G.add_edge((v,w,'jump'))
         sinks = G.sinks()
         while sinks:
             for v in sinks:
                 G.delete_vertex(v)
             sinks = G.sinks()
-        G.show(method='js', link_distance=300, vertex_labels=False, edge_labels=True, charge=-1000, vertex_partition=[V.module_generators]+[[w for w in self._weight_dict[v.weight()] if w in G] for v in DBA._jump_locations_dict if v in G])
+        G.show(method='js', link_distance=300, vertex_labels=False, edge_labels=True, charge=-1000, vertex_partition=[V.module_generators])
 
-        return (G, v)
+        return (G, V.module_generators[0])
 
     def _recursive_evaluation(self, g, ls_path, crystal, jump_history=dict()):
         #if len(jump_history) > 1:
@@ -216,18 +230,18 @@ class DoubleBruhatAlgebra(SageObject):
             current_l = l(v,i)
             for j in range(current_k+1):
                 if v == ls_path:
-                    shift = 0
-                    #if new_ls_path in jump_history:
-                    #    shift = k(new_ls_path, i)
-                    output += self._recursive_evaluation(new_g, new_ls_path, crystal, jump_history=jump_history) * gen**j * binomial(current_l-shift+j,j)
+                    output += self._recursive_evaluation(new_g, new_ls_path, crystal, jump_history=jump_history) * gen**j * binomial(current_l+j,j)
                 elif j > 0:
                     new_jump_history = copy(jump_history)
                     if v not in new_jump_history:
                         new_jump_history[v] = [ls_path]
                     else:
                         new_jump_history[v].append(ls_path)
+                    switch = 1
+                    if ls_path in jump_history:
+                        switch = 0
                     old_output = output
-                    output += self._recursive_evaluation(new_g, new_ls_path, crystal, jump_history=new_jump_history) * gen**j * binomial(current_l+j,j)
+                    output += self._recursive_evaluation(new_g, new_ls_path, crystal, jump_history=new_jump_history) * gen**j * binomial(switch*current_l+j,j)
                     if output != old_output and ls_path not in self._jump_locations_dict:
                         self._jump_locations_dict[ls_path] = v
 
@@ -325,7 +339,7 @@ def test_conjecture_on_matrix(b_matrix, mutation_type=None, coxeter=None, cartan
             print("Fail")
             print([m/variable.denominator() for m in variable.numerator().monomials() if m not in minor.numerator().monomials()])
             print([m/minor.denominator() for m in minor.numerator().monomials() if m not in variable.numerator().monomials()])
-            #print(minor-variable)
+            print(minor-variable)
             got_problems = True
     print
     return not got_problems
