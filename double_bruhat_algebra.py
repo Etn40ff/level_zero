@@ -19,7 +19,7 @@ class DoubleBruhatAlgebra(SageObject):
         self._La = self._RS.weight_space(extended = True).basis()
 
         # generic element
-        self._g = [ ('-', i) for i in self._c ]
+#        self._g = [ ('-', i) for i in self._c ]
         self._g.append(('h',None))
         self._g += [ ('+', i) for i in reversed(self._c) ]
 
@@ -86,8 +86,10 @@ class DoubleBruhatAlgebra(SageObject):
                     w2 = step_op_string(ls_path,[j]*l(ls_path,j))
                     if l(w2,i) != 0 and step_op(w2,i) == step_op(w1,j) and v not in jump_list:
                         jump_list.append(v)
-        if ls_path in jump_history:
-            jump_list.append(jump_history[ls_path])
+#        if ls_path in jump_history:
+#            for v in jump_history[ls_path]:
+#                if v not in jump_list:
+#                    jump_list.append(v)
 
         #jump_list = jump_dict[wt]
 
@@ -101,7 +103,10 @@ class DoubleBruhatAlgebra(SageObject):
                     G = self._recursive_path_graph(new_g, new_ls_path, crystal, G=G,jump_history=jump_history)
                 elif j > 0:
                     new_jump_history = copy(jump_history)
-                    new_jump_history[v] = ls_path
+                    if v not in new_jump_history:
+                        new_jump_history[v] = [ls_path]
+                    else:
+                        new_jump_history.append(ls_path)
                     old_G = copy(G)
                     G = self._recursive_path_graph(new_g, new_ls_path, crystal, G=G,jump_history=new_jump_history)
                     if G != old_G and ls_path not in self._jump_locations_dict:
@@ -119,6 +124,7 @@ class DoubleBruhatAlgebra(SageObject):
         else:
             V = crystals.LSPaths(sum([x*y for x,y in zip(weight,self._La)])).subcrystal(max_depth=self._n**2)
         self._jump_locations_dict = dict()
+        self._weight_dict = None
         G = self._recursive_path_graph(self._g, V.module_generators[0], V)
         for v in self._jump_locations_dict:
             G.add_edge((v,self._jump_locations_dict[v],'jump'))
@@ -129,7 +135,7 @@ class DoubleBruhatAlgebra(SageObject):
             sinks = G.sinks()
         G.show(method='js', link_distance=300, vertex_labels=False, edge_labels=True, charge=-1000, vertex_partition=[V.module_generators]+[[w for w in self._weight_dict[v.weight()] if w in G] for v in DBA._jump_locations_dict if v in G])
 
-        #return (G, v)
+        return (G, v)
 
     def _recursive_evaluation(self, g, ls_path, crystal, jump_history=dict()):
         #if len(jump_history) > 1:
@@ -190,8 +196,10 @@ class DoubleBruhatAlgebra(SageObject):
                     w2 = step_op_string(ls_path,[j]*l(ls_path,j))
                     if l(w2,i) != 0 and step_op(w2,i) == step_op(w1,j) and v not in jump_list:
                         jump_list.append(v)
-        if ls_path in jump_history:
-            jump_list.append(jump_history[ls_path])
+#        if ls_path in jump_history:
+#            for v in jump_history[ls_path]:
+#                if v not in jump_list:
+#                    jump_list.append(v)
 
         #jump_list = jump_dict[wt]
 
@@ -211,7 +219,10 @@ class DoubleBruhatAlgebra(SageObject):
                     output += self._recursive_evaluation(new_g, new_ls_path, crystal, jump_history=jump_history) * gen**j #* binomial(current_l-shift+j,j)
                 elif j > 0:
                     new_jump_history = copy(jump_history)
-                    new_jump_history[v] = ls_path
+                    if v not in new_jump_history:
+                        new_jump_history[v] = [ls_path]
+                    else:
+                        new_jump_history.append(ls_path)
                     old_output = output
                     output += self._recursive_evaluation(new_g, new_ls_path, crystal, jump_history=new_jump_history) * gen**j #* binomial(current_l+j,j)
                     if output != old_output and ls_path not in self._jump_locations_dict:
@@ -230,6 +241,7 @@ class DoubleBruhatAlgebra(SageObject):
         else:
             V = crystals.LSPaths(sum([x*y for x,y in zip(weight,self._La)])).subcrystal(max_depth=self._n**2)
         self._jump_locations_dict = dict()
+        self._weight_dict = None
         return self._recursive_evaluation(self._g, V.module_generators[0], V)
 
 
