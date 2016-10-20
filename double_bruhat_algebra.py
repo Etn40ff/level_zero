@@ -19,7 +19,7 @@ class DoubleBruhatAlgebra(SageObject):
         self._La = self._RS.weight_space(extended = True).basis()
 
         # generic element
-#        self._g = [ ('-', i) for i in self._c ]
+        self._g = [ ('-', i) for i in self._c ]
         self._g.append(('h',None))
         self._g += [ ('+', i) for i in reversed(self._c) ]
 
@@ -106,7 +106,7 @@ class DoubleBruhatAlgebra(SageObject):
                     if v not in new_jump_history:
                         new_jump_history[v] = [ls_path]
                     else:
-                        new_jump_history.append(ls_path)
+                        new_jump_history[v].append(ls_path)
                     old_G = copy(G)
                     G = self._recursive_path_graph(new_g, new_ls_path, crystal, G=G,jump_history=new_jump_history)
                     if G != old_G and ls_path not in self._jump_locations_dict:
@@ -216,15 +216,15 @@ class DoubleBruhatAlgebra(SageObject):
                     shift = 0
                     #if new_ls_path in jump_history:
                     #    shift = k(new_ls_path, i)
-                    output += self._recursive_evaluation(new_g, new_ls_path, crystal, jump_history=jump_history) * gen**j #* binomial(current_l-shift+j,j)
+                    output += self._recursive_evaluation(new_g, new_ls_path, crystal, jump_history=jump_history) * gen**j * binomial(current_l-shift+j,j)
                 elif j > 0:
                     new_jump_history = copy(jump_history)
                     if v not in new_jump_history:
                         new_jump_history[v] = [ls_path]
                     else:
-                        new_jump_history.append(ls_path)
+                        new_jump_history[v].append(ls_path)
                     old_output = output
-                    output += self._recursive_evaluation(new_g, new_ls_path, crystal, jump_history=new_jump_history) * gen**j #* binomial(current_l+j,j)
+                    output += self._recursive_evaluation(new_g, new_ls_path, crystal, jump_history=new_jump_history) * gen**j * binomial(current_l+j,j)
                     if output != old_output and ls_path not in self._jump_locations_dict:
                         self._jump_locations_dict[ls_path] = v
 
