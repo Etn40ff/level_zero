@@ -28,9 +28,10 @@ class DoubleBruhatAlgebra(SageObject):
 
         self._jump_locations_dict = dict()
         self._weight_dict = None
+        self._admissible_paths_dict = dict()
 
 
-    def _recursive_path_graph(self, g, ls_path, crystal, G = None, jump_history=dict()):
+    def _recursive_path_graph(self, g, ls_path, crystal, G = None, jump_history=dict(), path_so_far=[]):
 
         if not G:
             G = DiGraph(weighted=True, loops=True)
@@ -53,7 +54,7 @@ class DoubleBruhatAlgebra(SageObject):
 
         if cpt == 'h':
 #            G.add_edge((ls_path,ls_path,'h'))
-            return self._recursive_path_graph(new_g, ls_path, crystal, G=G, jump_history=jump_history)
+            return self._recursive_path_graph(new_g, ls_path, crystal, G=G, jump_history=jump_history, path_so_far=path_so_far)
         elif cpt == '-':
             step = lambda v,i: v.f(i)
             step_op = lambda v,i: v.e(i)
@@ -86,10 +87,11 @@ class DoubleBruhatAlgebra(SageObject):
                     w2 = step_op_string(ls_path,[j]*l(ls_path,j))
                     if l(w2,i) != 0 and step_op(w2,i) == step_op(w1,j) and v not in jump_list:
                         jump_list.append(v)
-#        if ls_path in jump_history:
-#            for v in jump_history[ls_path]:
-#                if v not in jump_list:
-#                    jump_list.append(v)
+        if ls_path in jump_history:
+            jump_list = [ls_path]
+            for v in jump_history[ls_path]:
+                if v not in jump_list:
+                    jump_list.append(v)
 
         #jump_list = jump_dict[wt]
 
@@ -100,7 +102,7 @@ class DoubleBruhatAlgebra(SageObject):
             current_k = k(v,i)
             for j in range(current_k+1):
                 if v == ls_path:
-                    G = self._recursive_path_graph(new_g, new_ls_path, crystal, G=G,jump_history=jump_history)
+                    G = self._recursive_path_graph(new_g, new_ls_path, crystal, G=G, jump_history=jump_history, path_so_far=path_so_far+[new_ls_path])
                 elif j > 0:
                     new_jump_history = copy(jump_history)
                     if v not in new_jump_history:
@@ -108,7 +110,7 @@ class DoubleBruhatAlgebra(SageObject):
                     else:
                         new_jump_history[v].append(ls_path)
                     old_G = copy(G)
-                    G = self._recursive_path_graph(new_g, new_ls_path, crystal, G=G,jump_history=new_jump_history)
+                    G = self._recursive_path_graph(new_g, new_ls_path, crystal, G=G, jump_history=new_jump_history, path_so_far=path_so_far+[new_ls_path])
                     if G != old_G and ls_path not in self._jump_locations_dict:
                         self._jump_locations_dict[ls_path] = v
                 if j < current_k:
@@ -119,12 +121,12 @@ class DoubleBruhatAlgebra(SageObject):
 
     def path_graph(self, weight):
         # TODO: improve choice of max_depth
-        if weight.parent() == self._RS.weight_space(extended = True):
-            V = crystals.LSPaths(weight).subcrystal(max_depth=self._n**2)
-        else:
-            V = crystals.LSPaths(sum([x*y for x,y in zip(weight,self._La)])).subcrystal(max_depth=self._n**2)
+        if type(weight) == 'tuple':
+            weight = sum([x*y for x,y in zip(weight,self._La)])
+        V = crystals.LSPaths(weight).subcrystal(max_depth=self._n**2)
         self._jump_locations_dict = dict()
         self._weight_dict = None
+        self._admissible_paths_dict[weight] = dict()
         G = self._recursive_path_graph(self._g, V.module_generators[0], V)
         for v in self._jump_locations_dict:
             G.add_edge((v,self._jump_locations_dict[v],'jump'))
@@ -196,10 +198,11 @@ class DoubleBruhatAlgebra(SageObject):
                     w2 = step_op_string(ls_path,[j]*l(ls_path,j))
                     if l(w2,i) != 0 and step_op(w2,i) == step_op(w1,j) and v not in jump_list:
                         jump_list.append(v)
-#        if ls_path in jump_history:
-#            for v in jump_history[ls_path]:
-#                if v not in jump_list:
-#                    jump_list.append(v)
+        if ls_path in jump_history:
+            jump_list = [ls_path]
+            for v in jump_history[ls_path]:
+                if v not in jump_list:
+                    jump_list.append(v)
 
         #jump_list = jump_dict[wt]
 
