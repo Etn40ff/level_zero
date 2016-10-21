@@ -16,7 +16,7 @@ class DoubleBruhatAlgebra(SageObject):
 
         self._RS = RootSystem(self._A.cartan_type())
 
-        self._La = self._RS.weight_space(extended = True).basis()
+        self._La = self._RS.weight_space().basis()
 
         # generic element
         self._g = [ ('-', i) for i in self._c ]
@@ -26,8 +26,7 @@ class DoubleBruhatAlgebra(SageObject):
         # ambient ring
         self._R = PolynomialRing(QQ, sorted(flatten([('h%s'%i,'r%s'%i,'t%s'%i) for i in xrange(self._n)])))
 
-        self._jump_locations_dict = dict()
-        self._weight_dict = None
+        self._crystal_weight_dict = dict()
         self._admissible_paths_dict = dict()
 
 
@@ -45,14 +44,15 @@ class DoubleBruhatAlgebra(SageObject):
                 self._admissible_paths_dict[crystal.module_generators[0].weight()].append(path_so_far)
             return G
 
-        if not self._weight_dict:
-            self._weight_dict = dict()
+        crystal_weight = crystal.module_generators[0].weight()
+        if not self._crystal_weight_dict[crystal_weight]:
+            self._crystal_weight_dict[crystal_weight] = dict()
             for v in crystal:
                 wt = v.weight()
-                if wt in self._weight_dict:
-                    self._weight_dict[wt].append(v)
+                if wt in self._crystal_weight_dict[crystal_weight]:
+                    self._crystal_weight_dict[crystal_weight][wt].append(v)
                 else:
-                    self._weight_dict[wt] = [v]
+                    self._crystal_weight_dict[crystal_weight][wt] = [v]
 
         new_g = copy(g)
         cpt , i = new_g.pop()
@@ -78,7 +78,7 @@ class DoubleBruhatAlgebra(SageObject):
         jump_list = [ls_path]
         steps_list1 = [ j for j in range(self._n) if k(ls_path,j) != 0 ]
         op_steps_list = [ j for j in range(self._n) if l(ls_path,j) != 0 ]
-        for v in self._weight_dict[wt]:
+        for v in self._crystal_weight_dict[crystal_weight][wt]:
             if v != ls_path:
                 steps_list2 = [ j for j in range(self._n) if k(v,j) != 0 ]
                 for r in steps_list1:
@@ -121,11 +121,6 @@ class DoubleBruhatAlgebra(SageObject):
                     path_so_far.append((ls_path,v,'jump'))
                     old_G = copy(G)
                     G = self._recursive_path_graph(new_g, new_ls_path, crystal, G=G, jump_history=new_jump_history, path_so_far=path_so_far+[(v,new_ls_path,(cpt,i,j))])
-                    if G != old_G:
-                        if ls_path not in self._jump_locations_dict:
-                            self._jump_locations_dict[ls_path] = [v]
-                        else:
-                            self._jump_locations_dict[ls_path].append(v)
                 if j < current_k:
                     new_ls_path = step(new_ls_path, i)
 #                    if cpt == '+':
@@ -134,16 +129,13 @@ class DoubleBruhatAlgebra(SageObject):
 
     def path_graph(self, weight):
         # TODO: improve choice of max_depth
-        if type(weight) == 'tuple':
+        if type(weight) == tuple:
             weight = sum([x*y for x,y in zip(weight,self._La)])
         V = crystals.LSPaths(weight).subcrystal(max_depth=self._n**2)
-        self._jump_locations_dict = dict()
-        self._weight_dict = None
+        if not weight in self._crystal_weight_dict:
+            self._crystal_weight_dict[weight] = None
         self._admissible_paths_dict[weight] = []
         G = self._recursive_path_graph(self._g, V.module_generators[0], V)
-#        for v in self._jump_locations_dict:
-#            for w in self._jump_locations_dict[v]:
-#                G.add_edge((v,w,'jump'))
         sinks = G.sinks()
         while sinks:
             for v in sinks:
@@ -163,14 +155,15 @@ class DoubleBruhatAlgebra(SageObject):
             else:
                 return 0
 
-        if not self._weight_dict:
-            self._weight_dict = dict()
+        crystal_weight = crystal.module_generators[0].weight()
+        if not self._crystal_weight_dict[crystal_weight]:
+            self._crystal_weight_dict[crystal_weight] = dict()
             for v in crystal:
                 wt = v.weight()
-                if wt in self._weight_dict:
-                    self._weight_dict[wt].append(v)
+                if wt in self._crystal_weight_dict[crystal_weight]:
+                    self._crystal_weight_dict[crystal_weight][wt].append(v)
                 else:
-                    self._weight_dict[wt] = [v]
+                    self._crystal_weight_dict[crystal_weight][wt] = [v]
 
         new_g = copy(g)
         cpt , i = new_g.pop()
@@ -198,7 +191,7 @@ class DoubleBruhatAlgebra(SageObject):
         jump_list = [ls_path]
         steps_list1 = [ j for j in range(self._n) if k(ls_path,j) != 0 ]
         op_steps_list = [ j for j in range(self._n) if l(ls_path,j) != 0 ]
-        for v in self._weight_dict[wt]:
+        for v in self._crystal_weight_dict[crystal_weight][wt]:
             if v != ls_path:
                 steps_list2 = [ j for j in range(self._n) if k(v,j) != 0 ]
                 for r in steps_list1:
@@ -242,8 +235,6 @@ class DoubleBruhatAlgebra(SageObject):
                         switch = 0
                     old_output = output
                     output += self._recursive_evaluation(new_g, new_ls_path, crystal, jump_history=new_jump_history) * gen**j * binomial(switch*current_l+j,j)
-                    if output != old_output and ls_path not in self._jump_locations_dict:
-                        self._jump_locations_dict[ls_path] = v
 
                 if j < current_k:
                     new_ls_path = step(new_ls_path, i)
@@ -253,12 +244,11 @@ class DoubleBruhatAlgebra(SageObject):
 
 
     def generalized_minor(self, weight):
-        if weight.parent() == self._RS.weight_space(extended = True):
-            V = crystals.LSPaths(weight).subcrystal(max_depth=self._n**2)
-        else:
-            V = crystals.LSPaths(sum([x*y for x,y in zip(weight,self._La)])).subcrystal(max_depth=self._n**2)
-        self._jump_locations_dict = dict()
-        self._weight_dict = None
+        if type(weight) == tuple:
+            weight = sum([x*y for x,y in zip(weight,self._La)])
+        V = crystals.LSPaths(weight).subcrystal(max_depth=self._n**2)
+        if not weight in self._crystal_weight_dict:
+            self._crystal_weight_dict[weight] = None
         return self._recursive_evaluation(self._g, V.module_generators[0], V)
 
 
@@ -300,21 +290,23 @@ def test_conjecture_on_matrix(b_matrix, mutation_type=None, coxeter=None, cartan
     T = TropicalClusterAlgebra(b_matrix,mutation_type=mutation_type)
     if cartan_type:
         T.cartan_type.set_cache(cartan_type)
-    if not (T.is_affine() and T.is_acyclic()) :
-        raise NotImplementedError("This code works only with acyclic affine exchange matrices")
+    #if not (T.is_affine() and T.is_acyclic()) :
+    #    raise NotImplementedError("This code works only with acyclic affine exchange matrices")
 
     print("################################################################################\n")
     print("Testing Dynkin diagram\n"+T.cartan_type().ascii_art()+"\ncoxeter = " + str(coxeter))
     print
 
-    # find regular_g_vectors
-    tubes = flatten(T.affine_tubes())
-    regular_g_vectors = map(lambda x: vector(T.to_weight(x)),tubes)
-
     # blackbox to produce cluster variables
     n = b_matrix.ncols()
     Bdp = block_matrix([[b_matrix],[identity_matrix(n)],[identity_matrix(n)]])
     A = ClusterAlgebra(Bdp)
+
+    # find regular_g_vectors
+    #tubes = flatten(T.affine_tubes())
+    #regular_g_vectors = map(lambda x: tuple(vector(T.to_weight(x))),tubes)
+    A.explore_to_depth(10)
+    regular_g_vectors = A.g_vectors_so_far()
 
     # blackbox to produce minors
     R = DoubleBruhatAlgebra(b_matrix)
@@ -340,6 +332,7 @@ def test_conjecture_on_matrix(b_matrix, mutation_type=None, coxeter=None, cartan
             print([m/variable.denominator() for m in variable.numerator().monomials() if m not in minor.numerator().monomials()])
             print([m/minor.denominator() for m in minor.numerator().monomials() if m not in variable.numerator().monomials()])
             print(minor-variable)
+            print(minor)
             got_problems = True
     print
     return not got_problems
