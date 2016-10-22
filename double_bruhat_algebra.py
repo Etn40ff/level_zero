@@ -28,18 +28,19 @@ class DoubleBruhatAlgebra(SageObject):
 
         self._crystal_weight_dict = dict()
         self._admissible_paths_dict = dict()
+        self._octagon_dict = dict()
 
 
-    def _recursive_path_graph(self, g, ls_path, crystal, G = None, jump_history=dict(), path_so_far=[]):
+    def _recursive_path_graph(self, g_pos, ls_path, crystal, G = None, jump_history = dict(), path_so_far = []):
 
         if not G:
-            G = DiGraph(weighted=True, loops=True)
+            G = DiGraph(weighted = True, loops = True)
 
-        if not g:
+        if g_pos == -1:
             if ls_path == crystal.module_generators[0]:
                 for e in path_so_far:
-                    if e[2] == 'jump' and (e[1],e[0],'jump') not in path_so_far:
-                        break
+#                    if e[2][3] == 'jump' and (e[2][0] == '+' and (e[1],e[0],('-',e[2][2],e[2][1],'jump',e[2][4])) not in path_so_far or e[2][0] == '-' and (e[1],e[0],('+',e[2][2],e[2][1],'jump',e[2][4])) not in path_so_far):
+#                        break
                     G.add_edge(e)
                 self._admissible_paths_dict[crystal.module_generators[0].weight()].append(path_so_far)
             return G
@@ -54,100 +55,91 @@ class DoubleBruhatAlgebra(SageObject):
                 else:
                     self._crystal_weight_dict[crystal_weight][wt] = [v]
 
-        new_g = copy(g)
-        cpt , i = new_g.pop()
+        if not self._octagon_dict[crystal_weight]:
+            self._octagon_dict[crystal_weight] = dict()
+            for v in crystal:
+                wt = v.weight()
+                for w in self._crystal_weight_dict[crystal_weight][wt]:
+                    if w != v:
+                        for i in range(self._n):
+                            for j in range(self._n):
+                                post_v = v.e_string([i]*v.epsilon(i))
+                                post_w = w.e_string([j]*w.epsilon(j))
+                                pre_v = v.f_string([i]*v.phi(i))
+                                pre_w = w.f_string([j]*w.phi(j))
+                                if pre_w.phi(i) != 0 and pre_w.f(i) == pre_v.f(j):
+                                    coeff = post_v.epsilon(j) * self._R.gens()[2*self._n+i] * self._R.gens()[2*self._n+j]
+                                    if (pre_v, '+', i) in self._octagon_dict:
+                                        self._octagon_dict[crystal_weight][(pre_v,'+',i)].append((j,post_w,coeff))
+                                    else:
+                                        self._octagon_dict[crystal_weight][(pre_v,'+',i)] =[(j,post_w,coeff)]
+                                if post_w.epsilon(i) != 0 and post_w.e(i) == post_v.e(j):
+                                    coeff = pre_v.phi(j) * self._R.gens()[self._n+i] * self._R.gens()[self._n+j]
+                                    if (post_v, '-', i) in self._octagon_dict:
+                                        self._octagon_dict[crystal_weight][(post_v,'-',i)].append((j,pre_w,coeff))
+                                    else:
+                                        self._octagon_dict[crystal_weight][(post_v,'-',i)] = [(j,pre_w,coeff)]
+
+        cpt , i = self._g[g_pos]
         wt = ls_path.weight()
 
         if cpt == 'h':
-            return self._recursive_path_graph(new_g, ls_path, crystal, G=G, jump_history=jump_history, path_so_far=path_so_far+[(ls_path,ls_path,'h')])
+            monomial = prod([ h**a for (h,a) in zip(self._R.gens()[:self._n],vector(wt))])
+            return self._recursive_path_graph(g_pos-1, ls_path, crystal, G=G, jump_history=jump_history, path_so_far=path_so_far+[(ls_path,ls_path,('','','','h',monomial))])
         elif cpt == '-':
             step = lambda v,i: v.f(i)
-            step_op = lambda v,i: v.e(i)
             step_string = lambda v,l: v.f_string(l)
-            step_op_string = lambda v,l: v.e_string(l)
             k = lambda v,i: v.phi(i)
             l = lambda v,i: v.epsilon(i)
+            gen = self._R.gens()[self._n+i]
         else:
             step = lambda v,i: v.e(i)
-            step_op = lambda v,i: v.f(i)
             step_string = lambda v,l: v.e_string(l)
-            step_op_string = lambda v,l: v.f_string(l)
             k = lambda v,i: v.epsilon(i)
             l = lambda v,i: v.phi(i)
+            gen = self._R.gens()[2*self._n+i]
 
-        jump_list = [ls_path]
-        steps_list1 = [ j for j in range(self._n) if k(ls_path,j) != 0 ]
-        op_steps_list = [ j for j in range(self._n) if l(ls_path,j) != 0 ]
-        for v in self._crystal_weight_dict[crystal_weight][wt]:
-            if v != ls_path:
-                steps_list2 = [ j for j in range(self._n) if k(v,j) != 0 ]
-                for r in steps_list1:
-                    for s in steps_list2:
-                        w1 = step_string(v,[s]*k(v,s))
-                        w2 = step_string(ls_path,[r]*k(ls_path,r))
-                        if k(w2,s) != 0 and step(w2,s) == step(w1,r) and v not in jump_list:
-                            jump_list.append(v)
-                for j in op_steps_list:
-                    w1 = step_op_string(v,[i]*l(v,i))
-                    w2 = step_op_string(ls_path,[j]*l(ls_path,j))
-                    if l(w2,i) != 0 and step_op(w2,i) == step_op(w1,j) and v not in jump_list:
-                        jump_list.append(v)
-        if ls_path in jump_history:
-            jump_list = [ls_path]
-            for v in jump_history[ls_path]:
-                if v not in jump_list:
-                    jump_list.append(v)
+        for r in range(k(ls_path, i) + 1):
+            new_ls_path = step_string(ls_path, [i]*r)
+            if r == 0:
+                new_edge = []
+            else:
+                monomial = binomial( l(ls_path, i) + r, r) * gen**r
+                new_edge = [(ls_path, new_ls_path, (cpt, i, r, '', monomial))]
+            G = self._recursive_path_graph(g_pos-1, new_ls_path, crystal, G=G, jump_history=jump_history, path_so_far=path_so_far+new_edge)
 
-        #jump_list = jump_dict[wt]
+        if (ls_path, cpt, i) in self._octagon_dict[crystal_weight]:
+            for j, new_ls_path, coeff in self._octagon_dict[crystal_weight][(ls_path, cpt, i)]:
+                if (cpt, j) == self._g[g_pos-1]:
+                    new_edge = [(ls_path, new_ls_path, (cpt, i, j, 'jump', coeff))]
+                    G = self._recursive_path_graph(g_pos-2, new_ls_path, crystal, G=G, jump_history=jump_history, path_so_far=path_so_far+new_edge)
 
-        for v in jump_list:
-#            if v != ls_path:
-#                G.add_edge((ls_path,v,'jump'))
-            new_ls_path = copy(v)
-            current_k = k(v,i)
-            for j in range(current_k+1):
-                if v == ls_path:
-                    if j == 0:
-                        new_edge = []
-                    else:
-                        new_edge = [(v,new_ls_path,(cpt,i,j))]
-                    G = self._recursive_path_graph(new_g, new_ls_path, crystal, G=G, jump_history=jump_history, path_so_far=path_so_far+new_edge)
-                elif j > 0:
-                    new_jump_history = copy(jump_history)
-                    if v not in new_jump_history:
-                        new_jump_history[v] = [ls_path]
-                    else:
-                        new_jump_history[v].append(ls_path)
-                    path_so_far.append((ls_path,v,'jump'))
-                    old_G = copy(G)
-                    G = self._recursive_path_graph(new_g, new_ls_path, crystal, G=G, jump_history=new_jump_history, path_so_far=path_so_far+[(v,new_ls_path,(cpt,i,j))])
-                if j < current_k:
-                    new_ls_path = step(new_ls_path, i)
-#                    if cpt == '+':
-#                    G.add_edge((v,new_ls_path,(cpt,i,j+1)))
         return G
 
-    def path_graph(self, weight):
+    def path_graph(self, weight, to_show=True):
         # TODO: improve choice of max_depth
         if type(weight) == tuple:
             weight = sum([x*y for x,y in zip(weight,self._La)])
-        V = crystals.LSPaths(weight).subcrystal(max_depth=self._n**2)
+        V = crystals.LSPaths(weight).subcrystal(max_depth=self._n**4)
         if not weight in self._crystal_weight_dict:
             self._crystal_weight_dict[weight] = None
-        self._admissible_paths_dict[weight] = []
-        G = self._recursive_path_graph(self._g, V.module_generators[0], V)
-        sinks = G.sinks()
-        while sinks:
-            for v in sinks:
-                G.delete_vertex(v)
-            sinks = G.sinks()
-        G.show(method='js', link_distance=300, vertex_labels=False, edge_labels=True, charge=-1000, vertex_partition=[V.module_generators])
+        if not weight in self._octagon_dict:
+            self._octagon_dict[weight] = None
+        if not weight in self._admissible_paths_dict:
+            self._admissible_paths_dict[weight] = []
+            G = self._recursive_path_graph(len(self._g)-1, V.module_generators[0], V)
+        else:
+            G = DiGraph(weighted = True, loops = True)
+            for path in self._admissible_paths_dict[weight]:
+                for e in path:
+                    G.add_edge(e)
 
-        return (G, V.module_generators[0])
+        if to_show:
+            G.show(method='js', link_distance=300, vertex_labels=False, edge_labels=True, charge=-1000)#, vertex_partition=[V.module_generators])
+
+        return G
 
     def _recursive_evaluation(self, g, ls_path, crystal, jump_history=dict()):
-        #if len(jump_history) > 1:
-        #    print("lots of jumps " + str(len(jump_history)))
 
         if not g:
             if ls_path == crystal.module_generators[0]:
@@ -216,29 +208,23 @@ class DoubleBruhatAlgebra(SageObject):
         output = 0
 
         for v in jump_list:
-#            if v != ls_path:
-#                G.add_edge((ls_path,v,'jump'))
             new_ls_path = copy(v)
             current_k = k(v,i)
             current_l = l(v,i)
             for j in range(current_k+1):
                 if v == ls_path:
-                    output += self._recursive_evaluation(new_g, new_ls_path, crystal, jump_history=jump_history) * gen**j * binomial(current_l+j,j)
+                    output += self._recursive_evaluation(new_g, new_ls_path, crystal, jump_history=jump_history) * gen**j * binomial(current_l+j,current_l)
                 elif j > 0:
                     new_jump_history = copy(jump_history)
                     if v not in new_jump_history:
                         new_jump_history[v] = [ls_path]
                     else:
                         new_jump_history[v].append(ls_path)
-                    switch = 1
-                    if ls_path in jump_history:
-                        switch = 0
                     old_output = output
-                    output += self._recursive_evaluation(new_g, new_ls_path, crystal, jump_history=new_jump_history) * gen**j * binomial(switch*current_l+j,j)
+                    output += self._recursive_evaluation(new_g, new_ls_path, crystal, jump_history=new_jump_history) * gen**j * binomial(current_l+j,current_l)
 
                 if j < current_k:
                     new_ls_path = step(new_ls_path, i)
-#                    if cpt == '+':
 
         return output
 
@@ -246,10 +232,16 @@ class DoubleBruhatAlgebra(SageObject):
     def generalized_minor(self, weight):
         if type(weight) == tuple:
             weight = sum([x*y for x,y in zip(weight,self._La)])
-        V = crystals.LSPaths(weight).subcrystal(max_depth=self._n**2)
-        if not weight in self._crystal_weight_dict:
-            self._crystal_weight_dict[weight] = None
-        return self._recursive_evaluation(self._g, V.module_generators[0], V)
+        if not weight in self._admissible_paths_dict:
+            self.path_graph(weight, to_show=False)
+        output = 0
+        for path in self._admissible_paths_dict[weight]:
+            term = 1
+            for e in path:
+                #print("edge=",e)
+                term *= e[2][4]
+            output += term
+        return output
 
 
 def test_conjecture_on_type(cartan_type):
