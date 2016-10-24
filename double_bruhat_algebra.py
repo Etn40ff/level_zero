@@ -47,29 +47,20 @@ class DoubleBruhatAlgebra(SageObject):
                                 if v.epsilon(i) != 0 and v.phi(i) != 0 and w.epsilon(j) != 0 and w.phi(j) != 0:
                                     post_v = v.e_string([i]*v.epsilon(i))
                                     pre_v = v.f_string([i]*v.phi(i))
-                                    #post_w = w.e_string([j]*w.epsilon(j))
+                                    post_w = w.e_string([j]*w.epsilon(j))
                                     pre_w = w.f_string([j]*w.phi(j))
                                     if pre_w.phi(i) != 0 and pre_w.f(i) == pre_v.f(j):
-                                        #after jumping, it is not necessary to follow the steps which are used show existence of an octagon
-                                        for k in range(self._n):
-                                            if post_v.epsilon(k) != 0 and w.epsilon(k) != 0:
-                                                coeff = post_v.epsilon(k) * self._R.gens()[2*self._n+i] * self._R.gens()[2*self._n+k]
-                                                post_w = w.e_string([k]*w.epsilon(k))
-                                                if (pre_v, '+', i) in self._octagon_dict[crystal_weight]:
-                                                    self._octagon_dict[crystal_weight][(pre_v, '+', i)].append((k, post_w, coeff))
-                                                else:
-                                                    self._octagon_dict[crystal_weight][(pre_v, '+', i)] = [(k, post_w, coeff)]
-                                                coeff = self._R.gens()[self._n+i] * self._R.gens()[self._n+k] #probably needs a scalar coefficient in general
-                                                if (post_w, 'i', k) in self._octagon_dict[crystal_weight]:
-                                                    self._octagon_dict[crystal_weight][(post_w, '-', k)].append((i, pre_v, coeff))
-                                                else:
-                                                    self._octagon_dict[crystal_weight][(post_w, '-', k)] = [(i, pre_v, coeff)]
-                                    #if post_w.epsilon(i) != 0 and post_w.e(i) == post_v.e(j):
-                                    #    coeff = pre_v.phi(j) * self._R.gens()[self._n+i] * self._R.gens()[self._n+j]
-                                    #    if (post_v, '-', i) in self._octagon_dict[crystal_weight]:
-                                    #        self._octagon_dict[crystal_weight][(post_v, '-', i)].append((j, pre_w, coeff))
-                                    #    else:
-                                    #        self._octagon_dict[crystal_weight][(post_v, '-', i)] = [(j, pre_w, coeff)]
+                                        coeff = post_v.epsilon(j) * self._R.gens()[2*self._n+i] * self._R.gens()[2*self._n+j]
+                                        if (pre_v, '+', i) in self._octagon_dict[crystal_weight]:
+                                            self._octagon_dict[crystal_weight][(pre_v, '+', i)].append((j, post_w, coeff))
+                                        else:
+                                            self._octagon_dict[crystal_weight][(pre_v, '+', i)] = [(j, post_w, coeff)]
+                                    if post_w.epsilon(i) != 0 and post_w.e(i) == post_v.e(j):
+                                        coeff = pre_v.phi(j) * self._R.gens()[self._n+i] * self._R.gens()[self._n+j]
+                                        if (post_v, '-', i) in self._octagon_dict[crystal_weight]:
+                                            self._octagon_dict[crystal_weight][(post_v, '-', i)].append((j, pre_w, coeff))
+                                        else:
+                                            self._octagon_dict[crystal_weight][(post_v, '-', i)] = [(j, pre_w, coeff)]
 
 
     def find_repeated_weights(self, crystal):
