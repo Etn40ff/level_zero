@@ -31,6 +31,63 @@ class DoubleBruhatAlgebra(SageObject):
         self._octagon_dict = dict()
 
 
+    def find_octagons(self, crystal):
+        crystal_weight = crystal.module_generators[0].weight()
+        if crystal_weight not in self._crystal_weight_dict:
+            self.find_repeated_weights(crystal)
+
+        self._octagon_dict[crystal_weight] = dict()
+        for v in crystal:
+            wt = v.weight()
+            if wt in self._crystal_weight_dict[crystal_weight]:
+                for w in self._crystal_weight_dict[crystal_weight][wt]:
+                    if w != v:
+                        for i in range(self._n):
+                            for j in range(self._n):
+                                if v.epsilon(i) != 0 and v.phi(i) != 0 and w.epsilon(j) != 0 and w.phi(j) != 0:
+                                    post_v = v.e_string([i]*v.epsilon(i))
+                                    pre_v = v.f_string([i]*v.phi(i))
+                                    #post_w = w.e_string([j]*w.epsilon(j))
+                                    pre_w = w.f_string([j]*w.phi(j))
+                                    if pre_w.phi(i) != 0 and pre_w.f(i) == pre_v.f(j):
+                                        #after jumping, it is not necessary to follow the steps which are used show existence of an octagon
+                                        for k in range(self._n):
+                                            if post_v.epsilon(k) != 0 and w.epsilon(k) != 0:
+                                                coeff = post_v.epsilon(k) * self._R.gens()[2*self._n+i] * self._R.gens()[2*self._n+k]
+                                                post_w = w.e_string([k]*w.epsilon(k))
+                                                if (pre_v, '+', i) in self._octagon_dict[crystal_weight]:
+                                                    self._octagon_dict[crystal_weight][(pre_v, '+', i)].append((k, post_w, coeff))
+                                                else:
+                                                    self._octagon_dict[crystal_weight][(pre_v, '+', i)] = [(k, post_w, coeff)]
+                                                coeff = self._R.gens()[self._n+i] * self._R.gens()[self._n+k] #probably needs a scalar coefficient in general
+                                                if (post_w, 'i', k) in self._octagon_dict[crystal_weight]:
+                                                    self._octagon_dict[crystal_weight][(post_w, '-', k)].append((i, pre_v, coeff))
+                                                else:
+                                                    self._octagon_dict[crystal_weight][(post_w, '-', k)] = [(i, pre_v, coeff)]
+                                    #if post_w.epsilon(i) != 0 and post_w.e(i) == post_v.e(j):
+                                    #    coeff = pre_v.phi(j) * self._R.gens()[self._n+i] * self._R.gens()[self._n+j]
+                                    #    if (post_v, '-', i) in self._octagon_dict[crystal_weight]:
+                                    #        self._octagon_dict[crystal_weight][(post_v, '-', i)].append((j, pre_w, coeff))
+                                    #    else:
+                                    #        self._octagon_dict[crystal_weight][(post_v, '-', i)] = [(j, pre_w, coeff)]
+
+
+    def find_repeated_weights(self, crystal):
+        crystal_weight = crystal.module_generators[0].weight()
+        self._crystal_weight_dict[crystal_weight] = dict()
+        tmp_dict = dict()
+        for v in crystal:
+            wt = v.weight()
+            if wt in tmp_dict:
+                tmp_dict[wt].append(v)
+            else:
+                tmp_dict[wt] = [v]
+        for wt in tmp_dict:
+            if len(tmp_dict[wt]) > 1:
+                self._crystal_weight_dict[crystal_weight][wt] = tmp_dict[wt]
+
+
+
     def _recursive_path_graph(self, g_pos, ls_path, crystal, G = None, jump_history = dict(), path_so_far = []):
 
         if not G:
@@ -46,39 +103,11 @@ class DoubleBruhatAlgebra(SageObject):
             return G
 
         crystal_weight = crystal.module_generators[0].weight()
-        if not self._crystal_weight_dict[crystal_weight]:
-            self._crystal_weight_dict[crystal_weight] = dict()
-            for v in crystal:
-                wt = v.weight()
-                if wt in self._crystal_weight_dict[crystal_weight]:
-                    self._crystal_weight_dict[crystal_weight][wt].append(v)
-                else:
-                    self._crystal_weight_dict[crystal_weight][wt] = [v]
+        if crystal_weight not in self._crystal_weight_dict:
+            self.find_repeated_weights(crystal)
 
-        if not self._octagon_dict[crystal_weight]:
-            self._octagon_dict[crystal_weight] = dict()
-            for v in crystal:
-                wt = v.weight()
-                for w in self._crystal_weight_dict[crystal_weight][wt]:
-                    if w != v:
-                        for i in range(self._n):
-                            for j in range(self._n):
-                                post_v = v.e_string([i]*v.epsilon(i))
-                                post_w = w.e_string([j]*w.epsilon(j))
-                                pre_v = v.f_string([i]*v.phi(i))
-                                pre_w = w.f_string([j]*w.phi(j))
-                                if pre_w.phi(i) != 0 and pre_w.f(i) == pre_v.f(j):
-                                    coeff = post_v.epsilon(j) * self._R.gens()[2*self._n+i] * self._R.gens()[2*self._n+j]
-                                    if (pre_v, '+', i) in self._octagon_dict:
-                                        self._octagon_dict[crystal_weight][(pre_v,'+',i)].append((j,post_w,coeff))
-                                    else:
-                                        self._octagon_dict[crystal_weight][(pre_v,'+',i)] =[(j,post_w,coeff)]
-                                if post_w.epsilon(i) != 0 and post_w.e(i) == post_v.e(j):
-                                    coeff = pre_v.phi(j) * self._R.gens()[self._n+i] * self._R.gens()[self._n+j]
-                                    if (post_v, '-', i) in self._octagon_dict:
-                                        self._octagon_dict[crystal_weight][(post_v,'-',i)].append((j,pre_w,coeff))
-                                    else:
-                                        self._octagon_dict[crystal_weight][(post_v,'-',i)] = [(j,pre_w,coeff)]
+        if crystal_weight not in self._octagon_dict:
+            self.find_octagons(crystal)
 
         cpt , i = self._g[g_pos]
         wt = ls_path.weight()
@@ -110,9 +139,10 @@ class DoubleBruhatAlgebra(SageObject):
 
         if (ls_path, cpt, i) in self._octagon_dict[crystal_weight]:
             for j, new_ls_path, coeff in self._octagon_dict[crystal_weight][(ls_path, cpt, i)]:
-                if (cpt, j) == self._g[g_pos-1]:
-                    new_edge = [(ls_path, new_ls_path, (cpt, i, j, 'jump', coeff))]
-                    G = self._recursive_path_graph(g_pos-2, new_ls_path, crystal, G=G, jump_history=jump_history, path_so_far=path_so_far+new_edge)
+                for p in range(self._n):
+                    if g_pos-1-p > 0 and (cpt, j) == self._g[g_pos-1-p]:
+                        new_edge = [(ls_path, new_ls_path, (cpt, i, j, 'jump', coeff))]
+                        G = self._recursive_path_graph(g_pos-2-p, new_ls_path, crystal, G=G, jump_history=jump_history, path_so_far=path_so_far+new_edge)
 
         return G
 
@@ -121,11 +151,7 @@ class DoubleBruhatAlgebra(SageObject):
         if type(weight) == tuple:
             weight = sum([x*y for x,y in zip(weight,self._La)])
         V = crystals.LSPaths(weight).subcrystal(max_depth=self._n**4)
-        if not weight in self._crystal_weight_dict:
-            self._crystal_weight_dict[weight] = None
-        if not weight in self._octagon_dict:
-            self._octagon_dict[weight] = None
-        if not weight in self._admissible_paths_dict:
+        if weight not in self._admissible_paths_dict:
             self._admissible_paths_dict[weight] = []
             G = self._recursive_path_graph(len(self._g)-1, V.module_generators[0], V)
         else:
@@ -135,7 +161,7 @@ class DoubleBruhatAlgebra(SageObject):
                     G.add_edge(e)
 
         if to_show:
-            G.show(method='js', link_distance=300, vertex_labels=False, edge_labels=True, charge=-1000)#, vertex_partition=[V.module_generators])
+            G.show(method='js', link_distance=300, vertex_labels=False, edge_labels=True, charge=-1000, vertex_partition=[V.module_generators])
 
         return G
 
