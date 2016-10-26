@@ -28,20 +28,22 @@ class DoubleBruhatAlgebra(SageObject):
 
         self._crystal_weight_dict = dict()
         self._admissible_paths_dict = dict()
-        self._octagon_dict = dict()
+        self._jump_dict = dict()
 
 
-    def find_octagons(self, crystal):
+    def find_jumps(self, crystal):
         crystal_weight = crystal.module_generators[0].weight()
         if crystal_weight not in self._crystal_weight_dict:
             self.find_repeated_weights(crystal)
 
-        self._octagon_dict[crystal_weight] = dict()
+        if crystal_weight not in self._jump_dict:
+            self._jump_dict[crystal_weight] = dict()
         for v in crystal:
             wt = v.weight()
             if wt in self._crystal_weight_dict[crystal_weight]:
                 for w in self._crystal_weight_dict[crystal_weight][wt]:
                     if w != v:
+                        #print(v,w)
                         for i in range(self._n):
                             for j in range(self._n):
                                 if v.epsilon(i) != 0 and v.phi(i) != 0 and w.epsilon(j) != 0 and w.phi(j) != 0:
@@ -49,18 +51,36 @@ class DoubleBruhatAlgebra(SageObject):
                                     pre_v = v.f_string([i]*v.phi(i))
                                     post_w = w.e_string([j]*w.epsilon(j))
                                     pre_w = w.f_string([j]*w.phi(j))
-                                    if pre_w.phi(i) != 0 and pre_w.f(i) == pre_v.f(j):
-                                        coeff = post_v.epsilon(j) * self._R.gens()[2*self._n+i] * self._R.gens()[2*self._n+j]
-                                        if (pre_v, '+', i) in self._octagon_dict[crystal_weight]:
-                                            self._octagon_dict[crystal_weight][(pre_v, '+', i)].append((j, post_w, coeff))
-                                        else:
-                                            self._octagon_dict[crystal_weight][(pre_v, '+', i)] = [(j, post_w, coeff)]
-                                    if post_w.epsilon(i) != 0 and post_w.e(i) == post_v.e(j):
-                                        coeff = pre_v.phi(j) * self._R.gens()[self._n+i] * self._R.gens()[self._n+j]
-                                        if (post_v, '-', i) in self._octagon_dict[crystal_weight]:
-                                            self._octagon_dict[crystal_weight][(post_v, '-', i)].append((j, pre_w, coeff))
-                                        else:
-                                            self._octagon_dict[crystal_weight][(post_v, '-', i)] = [(j, pre_w, coeff)]
+                                    has_roof = False
+                                    if  pre_w.phi(i) != 0 and pre_v.phi(j) != 0:
+                                        coeff = pre_v.phi(j) * self._R.gens()[2*self._n+i] * self._R.gens()[2*self._n+j]
+                                        for r in range(pre_w.phi(i)):
+                                            for s in range(pre_v.phi(j)):
+                                                if pre_w.f_string([i]*(r+1)) == pre_v.f_string([j]*(s+1)):
+                                                    #print(i,r,j,s)
+                                                    has_roof = True
+                                                    if (pre_v, '+', i) in self._jump_dict[crystal_weight]:
+                                                        self._jump_dict[crystal_weight][(pre_v, '+', i)].append((j, post_w, coeff))
+                                                    else:
+                                                        self._jump_dict[crystal_weight][(pre_v, '+', i)] = [(j, post_w, coeff)]
+                                                    #print(self._jump_dict)
+                                    if  post_w.epsilon(i) != 0 and post_v.epsilon(j) != 0:
+                                        coeff = post_v.epsilon(j) * self._R.gens()[self._n+i] * self._R.gens()[self._n+j]
+                                        for r in range(post_w.epsilon(i)):
+                                            for s in range(post_v.epsilon(j)):
+                                                if post_w.e_string([i]*(r+1)) == post_v.e_string([j]*(s+1)):
+                                                    has_roof = True
+                                                    if (post_v, '-', i) in self._jump_dict[crystal_weight]:
+                                                        self._jump_dict[crystal_weight][(post_v, '-', i)].append((j, pre_w, coeff))
+                                                    else:
+                                                        self._jump_dict[crystal_weight][(post_v, '-', i)] = [(j, pre_w, coeff)]
+                                    if has_roof:
+                                        for k in range(self._n):
+                                            if k != i and k != j:
+                                                if v.epsilon(k) != 0 and w.epsilon(k) != 0:
+                                                    next_node = w.e(k)
+                                                    self._jump_dict[crystal_weight][(v, '+', k)] = [(k, next_node, self._R.gens()[2*self._n+k])]
+                                                    self._jump_dict[crystal_weight][(next_node, '-', k)] = [(k, v, self._R.gens()[self._n+k])]
 
 
     def find_repeated_weights(self, crystal):
@@ -78,8 +98,7 @@ class DoubleBruhatAlgebra(SageObject):
                 self._crystal_weight_dict[crystal_weight][wt] = tmp_dict[wt]
 
 
-
-    def _recursive_path_graph(self, g_pos, ls_path, crystal, G = None, jump_history = dict(), path_so_far = []):
+    def _recursive_path_graph(self, g_pos, ls_path, crystal, G = None, path_so_far = []):
 
         if not G:
             G = DiGraph(weighted = True, loops = True)
@@ -87,25 +106,21 @@ class DoubleBruhatAlgebra(SageObject):
         if g_pos == -1:
             if ls_path == crystal.module_generators[0]:
                 for e in path_so_far:
-#                    if e[2][3] == 'jump' and (e[2][0] == '+' and (e[1],e[0],('-',e[2][2],e[2][1],'jump',e[2][4])) not in path_so_far or e[2][0] == '-' and (e[1],e[0],('+',e[2][2],e[2][1],'jump',e[2][4])) not in path_so_far):
-#                        break
                     G.add_edge(e)
                 self._admissible_paths_dict[crystal.module_generators[0].weight()].append(path_so_far)
             return G
 
         crystal_weight = crystal.module_generators[0].weight()
-        if crystal_weight not in self._crystal_weight_dict:
-            self.find_repeated_weights(crystal)
-
-        if crystal_weight not in self._octagon_dict:
-            self.find_octagons(crystal)
+        if crystal_weight not in self._jump_dict:
+            self.find_jumps(crystal)
 
         cpt , i = self._g[g_pos]
         wt = ls_path.weight()
 
         if cpt == 'h':
             monomial = prod([ h**a for (h,a) in zip(self._R.gens()[:self._n],vector(wt))])
-            return self._recursive_path_graph(g_pos-1, ls_path, crystal, G=G, jump_history=jump_history, path_so_far=path_so_far+[(ls_path,ls_path,('','','','h',monomial))])
+            new_edge = [(ls_path,ls_path,('','','','h',monomial))]
+            return self._recursive_path_graph(g_pos-1, ls_path, crystal, G=G, path_so_far=path_so_far+new_edge)
         elif cpt == '-':
             step = lambda v,i: v.f(i)
             step_string = lambda v,l: v.f_string(l)
@@ -125,17 +140,17 @@ class DoubleBruhatAlgebra(SageObject):
                 new_edge = []
             else:
                 monomial = binomial( l(ls_path, i) + r, r) * gen**r
-                new_edge = [(ls_path, new_ls_path, (cpt, i, r, '', monomial))]
-            G = self._recursive_path_graph(g_pos-1, new_ls_path, crystal, G=G, jump_history=jump_history, path_so_far=path_so_far+new_edge)
+                new_edge = [(ls_path, new_ls_path, (cpt, i, r, 'step', monomial))]
+            G = self._recursive_path_graph(g_pos-1, new_ls_path, crystal, G=G, path_so_far=path_so_far+new_edge)
 
-        if (ls_path, cpt, i) in self._octagon_dict[crystal_weight]:
-            for j, new_ls_path, coeff in self._octagon_dict[crystal_weight][(ls_path, cpt, i)]:
+        if (ls_path, cpt, i) in self._jump_dict[crystal_weight]:
+            for j, new_ls_path, coeff in self._jump_dict[crystal_weight][(ls_path, cpt, i)]:
                 for p in range(self._n):
-                    if g_pos-1-p > 0 and (cpt, j) == self._g[g_pos-1-p]:
+                    if g_pos-p > -1 and (cpt, j) == self._g[g_pos-p]:
                         new_edge = [(ls_path, new_ls_path, (cpt, i, j, 'jump', coeff))]
-                        G = self._recursive_path_graph(g_pos-2-p, new_ls_path, crystal, G=G, jump_history=jump_history, path_so_far=path_so_far+new_edge)
-
+                        G = self._recursive_path_graph(g_pos-1-p, new_ls_path, crystal, G=G, path_so_far=path_so_far+new_edge)
         return G
+
 
     def path_graph(self, weight, to_show=True):
         # TODO: improve choice of max_depth
@@ -282,7 +297,7 @@ def test_conjecture_on_type(cartan_type):
             to_check.append((B,tuple(c)))
 
     # run test
-    if all(test_conjecture_on_matrix(B, coxeter=c, mutation_type=qm) for (B,c) in to_check):
+    if all(test_conjecture_on_matrix(B, coxeter=c, mutation_type=qm, cartan_type=CartanType(cartan_type)) for (B,c) in to_check):
         return True
 
     return False
@@ -312,10 +327,12 @@ def test_conjecture_on_matrix(b_matrix, mutation_type=None, coxeter=None, cartan
     A = ClusterAlgebra(Bdp)
 
     # find regular_g_vectors
-    #tubes = flatten(T.affine_tubes())
-    #regular_g_vectors = map(lambda x: tuple(vector(T.to_weight(x))),tubes)
-    A.explore_to_depth(10)
-    regular_g_vectors = A.g_vectors_so_far()
+    if cartan_type.is_affine():
+        tubes = flatten(T.affine_tubes())
+        regular_g_vectors = map(lambda x: tuple(vector(T.to_weight(x))),tubes)
+    elif cartan_type.is_finite():
+        A.explore_to_depth(10)
+        regular_g_vectors = A.g_vectors_so_far()
 
     # blackbox to produce minors
     R = DoubleBruhatAlgebra(b_matrix)
