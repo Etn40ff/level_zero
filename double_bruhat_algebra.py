@@ -28,22 +28,42 @@ class DoubleBruhatAlgebra(SageObject):
 
         self._crystal_weight_dict = dict()
         self._admissible_paths_dict = dict()
-        self._jump_dict = dict()
+        self._step_dict = dict()
 
 
-    def find_jumps(self, crystal):
+    def find_steps(self, crystal):
         crystal_weight = crystal.module_generators[0].weight()
         if crystal_weight not in self._crystal_weight_dict:
             self.find_repeated_weights(crystal)
 
-        if crystal_weight not in self._jump_dict:
-            self._jump_dict[crystal_weight] = dict()
+        if crystal_weight not in self._step_dict:
+            self._step_dict[crystal_weight] = dict()
         for v in crystal:
+            #compute natural steps inside the crystal
+            for i in range(self._n):
+                if (v, '+', i) not in self._step_dict[crystal_weight]:
+                    self._step_dict[crystal_weight][(v, '+', i)] = dict()
+                for r in range(v.epsilon(i) + 1):
+                    next_node = v.e_string([i]*r)
+                    step_factor = binomial(v.phi(i)+r,r) * self._R.gens()[2*self._n+i]**r
+                    if (i, r) not in self._step_dict[crystal_weight][(v, '+', i)]:
+                        self._step_dict[crystal_weight][(v, '+', i)][(i,r)] = [(next_node, step_factor)]
+                    else:
+                        self._step_dict[crystal_weight][(v, '+', i)][(i,r)].append((next_node, step_factor))
+                if (v, '-', i) not in self._step_dict[crystal_weight]:
+                    self._step_dict[crystal_weight][(v, '-', i)] = dict()
+                for s in range(v.phi(i) + 1):
+                    next_node = v.f_string([i]*s)
+                    step_factor = binomial(v.epsilon(i)+s,s) * self._R.gens()[self._n+i]**s
+                    if (i, s) not in self._step_dict[crystal_weight][(v, '-', i)]:
+                        self._step_dict[crystal_weight][(v, '-', i)][(i,s)] = [(next_node, step_factor)]
+                    else:
+                        self._step_dict[crystal_weight][(v, '-', i)][(i,s)].append((next_node, step_factor))
             wt = v.weight()
             if wt in self._crystal_weight_dict[crystal_weight]:
                 for w in self._crystal_weight_dict[crystal_weight][wt]:
                     if w != v:
-                        #print(v,w)
+                        #compute jump steps inside the crystal`
                         for i in range(self._n):
                             for j in range(self._n):
                                 if v.epsilon(i) != 0 and v.phi(i) != 0 and w.epsilon(j) != 0 and w.phi(j) != 0:
@@ -57,30 +77,47 @@ class DoubleBruhatAlgebra(SageObject):
                                         for r in range(pre_w.phi(i)):
                                             for s in range(pre_v.phi(j)):
                                                 if pre_w.f_string([i]*(r+1)) == pre_v.f_string([j]*(s+1)):
-                                                    #print(i,r,j,s)
                                                     has_roof = True
-                                                    if (pre_v, '+', i) in self._jump_dict[crystal_weight]:
-                                                        self._jump_dict[crystal_weight][(pre_v, '+', i)].append((j, post_w, coeff))
+                                                    if (pre_v, '+', i) not in self._step_dict[crystal_weight]:
+                                                        self._step_dict[crystal_weight][(pre_v, '+', i)] = dict()
+                                                    key = (j, w.epsilon(j))
+                                                    if key not in self._step_dict[crystal_weight][(pre_v, '+', i)]:
+                                                        self._step_dict[crystal_weight][(pre_v, '+', i)][key] = [(post_w, coeff)]
                                                     else:
-                                                        self._jump_dict[crystal_weight][(pre_v, '+', i)] = [(j, post_w, coeff)]
-                                                    #print(self._jump_dict)
+                                                        self._step_dict[crystal_weight][(pre_v, '+', i)][key].append((post_w, coeff))
                                     if  post_w.epsilon(i) != 0 and post_v.epsilon(j) != 0:
                                         coeff = post_v.epsilon(j) * self._R.gens()[self._n+i] * self._R.gens()[self._n+j]
                                         for r in range(post_w.epsilon(i)):
                                             for s in range(post_v.epsilon(j)):
                                                 if post_w.e_string([i]*(r+1)) == post_v.e_string([j]*(s+1)):
                                                     has_roof = True
-                                                    if (post_v, '-', i) in self._jump_dict[crystal_weight]:
-                                                        self._jump_dict[crystal_weight][(post_v, '-', i)].append((j, pre_w, coeff))
+                                                    if (post_v, '-', i) not in self._step_dict[crystal_weight]:
+                                                        self._step_dict[crystal_weight][(post_v, '-', i)] = dict()
+                                                    key = (j, w.phi(j))
+                                                    if key not in self._step_dict[crystal_weight][(post_v, '-', i)]:
+                                                        self._step_dict[crystal_weight][(post_v, '-', i)][key] = [(pre_w, coeff)]
                                                     else:
-                                                        self._jump_dict[crystal_weight][(post_v, '-', i)] = [(j, pre_w, coeff)]
+                                                        self._step_dict[crystal_weight][(post_v, '-', i)][key].append((pre_w, coeff))
                                     if has_roof:
+                                        #parallel steps may be possible
                                         for k in range(self._n):
                                             if k != i and k != j:
                                                 if v.epsilon(k) != 0 and w.epsilon(k) != 0:
                                                     next_node = w.e(k)
-                                                    self._jump_dict[crystal_weight][(v, '+', k)] = [(k, next_node, self._R.gens()[2*self._n+k])]
-                                                    self._jump_dict[crystal_weight][(next_node, '-', k)] = [(k, v, self._R.gens()[self._n+k])]
+                                                    coeff = binomial(w.phi(k)+1,1) * self._R.gens()[2*self._n+k]
+                                                    if (v, '+', k) not in self._step_dict[crystal_weight]:
+                                                        self._step_dict[crystal_weight][(v, '+', k)] = dict()
+                                                    if (k,1) not in self._step_dict[crystal_weight][(v, '+', k)]:
+                                                        self._step_dict[crystal_weight][(v, '+', k)][(k,1)] = [(next_node, coeff)]
+                                                    else:
+                                                        self._step_dict[crystal_weight][(v, '+', k)][(k,1)].append((next_node, coeff))
+                                                    coeff = binomial(next_node.epsilon(k)+1,1) * self._R.gens()[self._n+k]
+                                                    if (next_node, '-', k) not in self._step_dict[crystal_weight]:
+                                                        self._step_dict[crystal_weight][(next_node, '-', k)] = dict()
+                                                    if (k,1) not in self._step_dict[crystal_weight][(next_node, '-', k)]:
+                                                        self._step_dict[crystal_weight][(next_node, '-', k)][(k,1)] = [(v, coeff)]
+                                                    else:
+                                                        self._step_dict[crystal_weight][(next_node, '-', k)][(k,1)].append((v, coeff))
 
 
     def find_repeated_weights(self, crystal):
@@ -111,8 +148,8 @@ class DoubleBruhatAlgebra(SageObject):
             return G
 
         crystal_weight = crystal.module_generators[0].weight()
-        if crystal_weight not in self._jump_dict:
-            self.find_jumps(crystal)
+        if crystal_weight not in self._step_dict:
+            self.find_steps(crystal)
 
         cpt , i = self._g[g_pos]
         wt = ls_path.weight()
@@ -121,34 +158,22 @@ class DoubleBruhatAlgebra(SageObject):
             monomial = prod([ h**a for (h,a) in zip(self._R.gens()[:self._n],vector(wt))])
             new_edge = [(ls_path,ls_path,('','','','h',monomial))]
             return self._recursive_path_graph(g_pos-1, ls_path, crystal, G=G, path_so_far=path_so_far+new_edge)
-        elif cpt == '-':
-            step = lambda v,i: v.f(i)
-            step_string = lambda v,l: v.f_string(l)
-            k = lambda v,i: v.phi(i)
-            l = lambda v,i: v.epsilon(i)
-            gen = self._R.gens()[self._n+i]
-        else:
-            step = lambda v,i: v.e(i)
-            step_string = lambda v,l: v.e_string(l)
-            k = lambda v,i: v.epsilon(i)
-            l = lambda v,i: v.phi(i)
-            gen = self._R.gens()[2*self._n+i]
 
-        for r in range(k(ls_path, i) + 1):
-            new_ls_path = step_string(ls_path, [i]*r)
-            if r == 0:
-                new_edge = []
-            else:
-                monomial = binomial( l(ls_path, i) + r, r) * gen**r
-                new_edge = [(ls_path, new_ls_path, (cpt, i, r, 'step', monomial))]
-            G = self._recursive_path_graph(g_pos-1, new_ls_path, crystal, G=G, path_so_far=path_so_far+new_edge)
-
-        if (ls_path, cpt, i) in self._jump_dict[crystal_weight]:
-            for j, new_ls_path, coeff in self._jump_dict[crystal_weight][(ls_path, cpt, i)]:
+        if (ls_path, cpt, i) in self._step_dict[crystal_weight]:
+            for j, s in self._step_dict[crystal_weight][(ls_path, cpt, i)]:
+                step_list = self._step_dict[crystal_weight][(ls_path, cpt, i)][(j, s)]
+                if cpt == '+':
+                    correction_factor = len(step_list)
+                else:
+                    correction_factor = 1
                 for p in range(self._n):
                     if g_pos-p > -1 and (cpt, j) == self._g[g_pos-p]:
-                        new_edge = [(ls_path, new_ls_path, (cpt, i, j, 'jump', coeff))]
-                        G = self._recursive_path_graph(g_pos-1-p, new_ls_path, crystal, G=G, path_so_far=path_so_far+new_edge)
+                        for new_ls_path, coeff in step_list:
+                            if j == i:
+                                new_edge = [(ls_path, new_ls_path, (cpt, i, s, 'step', coeff/correction_factor))]
+                            else:
+                                new_edge = [(ls_path, new_ls_path, (cpt, i, j, 'jump', coeff/correction_factor))]
+                            G = self._recursive_path_graph(g_pos-1-p, new_ls_path, crystal, G=G, path_so_far=path_so_far+new_edge)
         return G
 
 
@@ -170,95 +195,6 @@ class DoubleBruhatAlgebra(SageObject):
             G.show(method='js', link_distance=300, vertex_labels=False, edge_labels=True, charge=-1000, vertex_partition=[V.module_generators])
 
         return G
-
-    def _recursive_evaluation(self, g, ls_path, crystal, jump_history=dict()):
-
-        if not g:
-            if ls_path == crystal.module_generators[0]:
-                return 1
-            else:
-                return 0
-
-        crystal_weight = crystal.module_generators[0].weight()
-        if not self._crystal_weight_dict[crystal_weight]:
-            self._crystal_weight_dict[crystal_weight] = dict()
-            for v in crystal:
-                wt = v.weight()
-                if wt in self._crystal_weight_dict[crystal_weight]:
-                    self._crystal_weight_dict[crystal_weight][wt].append(v)
-                else:
-                    self._crystal_weight_dict[crystal_weight][wt] = [v]
-
-        new_g = copy(g)
-        cpt , i = new_g.pop()
-        wt = ls_path.weight()
-
-        if cpt == 'h':
-            return self._recursive_evaluation(new_g, copy(ls_path), crystal, jump_history=jump_history) * prod([ h**a for (h,a) in zip(self._R.gens()[:self._n],vector(wt))])
-        elif cpt == '-':
-            step = lambda v,i: v.f(i)
-            step_op = lambda v,i: v.e(i)
-            step_string = lambda v,l: v.f_string(l)
-            step_op_string = lambda v,l: v.e_string(l)
-            k = lambda v,i: v.phi(i)
-            l = lambda v,i: v.epsilon(i)
-            gen = self._R.gens()[self._n+i]
-        else:
-            step = lambda v,i: v.e(i)
-            step_op = lambda v,i: v.f(i)
-            step_string = lambda v,l: v.e_string(l)
-            step_op_string = lambda v,l: v.f_string(l)
-            k = lambda v,i: v.epsilon(i)
-            l = lambda v,i: v.phi(i)
-            gen = self._R.gens()[2*self._n+i]
-
-        jump_list = [ls_path]
-        steps_list1 = [ j for j in range(self._n) if k(ls_path,j) != 0 ]
-        op_steps_list = [ j for j in range(self._n) if l(ls_path,j) != 0 ]
-        for v in self._crystal_weight_dict[crystal_weight][wt]:
-            if v != ls_path:
-                steps_list2 = [ j for j in range(self._n) if k(v,j) != 0 ]
-                for r in steps_list1:
-                    for s in steps_list2:
-                        w1 = step_string(v,[s]*k(v,s))
-                        w2 = step_string(ls_path,[r]*k(ls_path,r))
-                        if k(w2,s) != 0 and step(w2,s) == step(w1,r) and v not in jump_list:
-                            jump_list.append(v)
-                for j in op_steps_list:
-                    w1 = step_op_string(v,[i]*l(v,i))
-                    w2 = step_op_string(ls_path,[j]*l(ls_path,j))
-                    if l(w2,i) != 0 and step_op(w2,i) == step_op(w1,j) and v not in jump_list:
-                        jump_list.append(v)
-        if ls_path in jump_history:
-            jump_list = [ls_path]
-            for v in jump_history[ls_path]:
-                if v not in jump_list:
-                    jump_list.append(v)
-
-        #jump_list = jump_dict[wt]
-
-        output = 0
-
-        for v in jump_list:
-            new_ls_path = copy(v)
-            current_k = k(v,i)
-            current_l = l(v,i)
-            for j in range(current_k+1):
-                if v == ls_path:
-                    output += self._recursive_evaluation(new_g, new_ls_path, crystal, jump_history=jump_history) * gen**j * binomial(current_l+j,current_l)
-                elif j > 0:
-                    new_jump_history = copy(jump_history)
-                    if v not in new_jump_history:
-                        new_jump_history[v] = [ls_path]
-                    else:
-                        new_jump_history[v].append(ls_path)
-                    old_output = output
-                    output += self._recursive_evaluation(new_g, new_ls_path, crystal, jump_history=new_jump_history) * gen**j * binomial(current_l+j,current_l)
-
-                if j < current_k:
-                    new_ls_path = step(new_ls_path, i)
-
-        return output
 
 
     def generalized_minor(self, weight):
