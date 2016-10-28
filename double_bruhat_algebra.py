@@ -102,22 +102,26 @@ class DoubleBruhatAlgebra(SageObject):
                                         #parallel steps may be possible
                                         for k in range(self._n):
                                             if k != i and k != j:
-                                                if v.epsilon(k) != 0 and w.epsilon(k) != 0:
-                                                    next_node = w.e(k)
-                                                    coeff = binomial(w.phi(k)+1,1) * self._R.gens()[2*self._n+k]
-                                                    if (v, '+', k) not in self._step_dict[crystal_weight]:
-                                                        self._step_dict[crystal_weight][(v, '+', k)] = dict()
-                                                    if (k,1) not in self._step_dict[crystal_weight][(v, '+', k)]:
-                                                        self._step_dict[crystal_weight][(v, '+', k)][(k,1)] = [(next_node, coeff)]
-                                                    else:
-                                                        self._step_dict[crystal_weight][(v, '+', k)][(k,1)].append((next_node, coeff))
-                                                    coeff = binomial(next_node.epsilon(k)+1,1) * self._R.gens()[self._n+k]
-                                                    if (next_node, '-', k) not in self._step_dict[crystal_weight]:
-                                                        self._step_dict[crystal_weight][(next_node, '-', k)] = dict()
-                                                    if (k,1) not in self._step_dict[crystal_weight][(next_node, '-', k)]:
-                                                        self._step_dict[crystal_weight][(next_node, '-', k)][(k,1)] = [(v, coeff)]
-                                                    else:
-                                                        self._step_dict[crystal_weight][(next_node, '-', k)][(k,1)].append((v, coeff))
+                                                if v.phi(k) != 0 or w.epsilon(k) != 0:
+                                                    for r in range(v.phi(k) + 1):
+                                                        for s in range(w.epsilon(k) + 1):
+                                                            if r + s != 0:
+                                                                prev_node = v.f_string([k]*r)
+                                                                next_node = w.e_string([k]*s)
+                                                                coeff = binomial(prev_node.phi(k)+r+s, r+s) * self._R.gens()[2*self._n+k]**(r+s)
+                                                                if (prev_node, '+', k) not in self._step_dict[crystal_weight]:
+                                                                    self._step_dict[crystal_weight][(prev_node, '+', k)] = dict()
+                                                                if (k, r+s) not in self._step_dict[crystal_weight][(prev_node, '+', k)]:
+                                                                    self._step_dict[crystal_weight][(prev_node, '+', k)][(k, r+s)] = [(next_node, coeff)]
+                                                                else:
+                                                                    self._step_dict[crystal_weight][(prev_node, '+', k)][(k, r+s)].append((next_node, coeff))
+                                                                coeff = binomial(next_node.epsilon(k)+r+s, r+s) * self._R.gens()[self._n+k]**(r+s)
+                                                                if (next_node, '-', k) not in self._step_dict[crystal_weight]:
+                                                                    self._step_dict[crystal_weight][(next_node, '-', k)] = dict()
+                                                                if (k, r+s) not in self._step_dict[crystal_weight][(next_node, '-', k)]:
+                                                                    self._step_dict[crystal_weight][(next_node, '-', k)][(k, r+s)] = [(prev_node, coeff)]
+                                                                else:
+                                                                    self._step_dict[crystal_weight][(next_node, '-', k)][(k, r+s)].append((prev_node, coeff))
 
 
     def find_repeated_weights(self, crystal):
@@ -162,16 +166,18 @@ class DoubleBruhatAlgebra(SageObject):
         if (ls_path, cpt, i) in self._step_dict[crystal_weight]:
             for j, s in self._step_dict[crystal_weight][(ls_path, cpt, i)]:
                 step_list = self._step_dict[crystal_weight][(ls_path, cpt, i)][(j, s)]
-                if cpt == '+':
-                    correction_factor = len(step_list)
-                else:
-                    correction_factor = 1
+#               if cpt == '-':
+#                   correction_factor = len(step_list)
+#               else:
+#                   correction_factor = 1
+                correction_factor = 1 #len(step_list)
                 for p in range(self._n):
                     if g_pos-p > -1 and (cpt, j) == self._g[g_pos-p]:
                         for new_ls_path, coeff in step_list:
-                            if j == i:
+                            new_edge = []
+                            if j == i and s > 0:
                                 new_edge = [(ls_path, new_ls_path, (cpt, i, s, 'step', coeff/correction_factor))]
-                            else:
+                            elif s > 0:
                                 new_edge = [(ls_path, new_ls_path, (cpt, i, j, 'jump', coeff/correction_factor))]
                             G = self._recursive_path_graph(g_pos-1-p, new_ls_path, crystal, G=G, path_so_far=path_so_far+new_edge)
         return G
@@ -262,16 +268,16 @@ def test_conjecture_on_matrix(b_matrix, mutation_type=None, coxeter=None, cartan
     Bdp = block_matrix([[b_matrix],[identity_matrix(n)],[identity_matrix(n)]])
     A = ClusterAlgebra(Bdp)
 
-    # find regular_g_vectors
-    if cartan_type.is_affine():
-        tubes = flatten(T.affine_tubes())
-        regular_g_vectors = map(lambda x: tuple(vector(T.to_weight(x))),tubes)
-    elif cartan_type.is_finite():
-        A.explore_to_depth(10)
-        regular_g_vectors = A.g_vectors_so_far()
-
     # blackbox to produce minors
     R = DoubleBruhatAlgebra(b_matrix)
+
+    # find regular_g_vectors
+    if R._A.is_affine():
+        tubes = flatten(T.affine_tubes())
+        regular_g_vectors = map(lambda x: tuple(vector(T.to_weight(x))),tubes)
+    elif R._A.is_finite():
+        A.explore_to_depth(10)
+        regular_g_vectors = A.g_vectors_so_far()
 
     # change of coordinates
     substitution = dict()
