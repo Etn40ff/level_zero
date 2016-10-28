@@ -67,10 +67,14 @@ class DoubleBruhatAlgebra(SageObject):
                         for i in range(self._n):
                             for j in range(self._n):
                                 if v.epsilon(i) != 0 and v.phi(i) != 0 and w.epsilon(j) != 0 and w.phi(j) != 0:
-                                    post_v = v.e_string([i]*v.epsilon(i))
-                                    pre_v = v.f_string([i]*v.phi(i))
-                                    post_w = w.e_string([j]*w.epsilon(j))
-                                    pre_w = w.f_string([j]*w.phi(j))
+                                    post_v = v.e(i)
+                                    #post_v = v.e_string([i]*v.epsilon(i))
+                                    pre_v = v.f(i)
+                                    #pre_v = v.f_string([i]*v.phi(i))
+                                    post_w = w.e(j)
+                                    #post_w = w.e_string([j]*w.epsilon(j))
+                                    pre_w = w.f(j)
+                                    #pre_w = w.f_string([j]*w.phi(j))
                                     has_roof = False
                                     if  pre_w.phi(i) != 0 and pre_v.phi(j) != 0:
                                         coeff = pre_v.phi(j) * self._R.gens()[2*self._n+i] * self._R.gens()[2*self._n+j]
