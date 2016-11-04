@@ -25,16 +25,112 @@ class DoubleBruhatAlgebra(SageObject):
 
         # ambient ring
         self._R = PolynomialRing(QQ, sorted(flatten([('h%s'%i,'r%s'%i,'t%s'%i) for i in xrange(self._n)])))
+        self._h_gens = self._R.gens()[:self._n]
+        self._minus_gens = self._R.gens()[self._n:2*self._n]
+        self._plus_gens = self._R.gens()[2*self._n:3*self._n]
 
         self._crystal_weight_dict = dict()
-        self._admissible_paths_dict = dict()
+        self._octagon_dict = dict()
+        self._roof_dict = dict()
+        self._jump_dict = dict()
         self._step_dict = dict()
+        self._admissible_paths_dict = dict()
+
+        self._check = []
+
+    def find_octagons(self, crystal):
+        crystal_weight = crystal.module_generators[0].weight()
+        if crystal_weight not in self._crystal_weight_dict:
+            self.find_repeated_weights(crystal)
+
+        if crystal_weight not in self._octagon_dict:
+            self._octagon_dict[crystal_weight] = dict()
+        if crystal_weight not in self._roof_dict:
+            self._roof_dict[crystal_weight] = dict()
+        for v in crystal:
+            wt = v.weight()
+            #jumps can only occur between vertices of the same weight
+            if wt in self._crystal_weight_dict[crystal_weight]:
+                for w in self._crystal_weight_dict[crystal_weight][wt]:
+                    #however not all jumps are possible
+                    for i in range(self._n):
+                        for j in range(self._n):
+                            if i != j and v.f_string([i]*v.phi(i)) != None and v.e_string([i]*v.epsilon(i)) != None and w.f_string([j]*w.phi(j)) != None and w.e_string([j]*w.epsilon(j)) != None:
+                                pre_v = v.f_string([i]*v.phi(i))
+                                post_v = v.e_string([i]*v.epsilon(i))
+                                pre_w = w.f_string([j]*w.phi(j))
+                                post_w = w.e_string([j]*w.epsilon(j))
+                                has_roof = 0
+                                has_floor = 0
+                                for r in range(1, post_v.epsilon(j)+1):
+                                    for s in range(1, post_w.epsilon(i)+1):
+                                        if post_v.e_string([j]*r) == post_w.e_string([i]*s) and post_v.e_string([j]*r) != None:
+                                            if r == 1 and s == 1:
+                                                has_roof = 1
+                                            else:
+                                                has_roof = 2
+                                for r in range(1, pre_v.phi(j)+1):
+                                    for s in range(1, pre_w.phi(i)+1):
+                                        if pre_v.f_string([j]*r) == pre_w.f_string([i]*s) and pre_v.f_string([j]*r) != None:
+                                            if r == 1 and s == 1:
+                                                has_floor = 1
+                                            else:
+                                                has_floor = 2
+                                #though jumps can occur if the vertices sit in an octagon
+                                if has_roof == 1 and has_floor == 1:
+                                    if v not in self._octagon_dict[crystal_weight]:
+                                        self._octagon_dict[crystal_weight][v] = dict()
+                                    if w not in self._octagon_dict[crystal_weight][v]:
+                                        if w != v:
+                                            self._octagon_dict[crystal_weight][v][w] = [(i, j)]
+                                        else:
+                                            self._octagon_dict[crystal_weight][v][w] = [i,j]
+                                    elif w != v:
+                                        self._octagon_dict[crystal_weight][v][w].append((i, j))
+                                    else:
+                                        if i not in self._octagon_dict[crystal_weight][v][w]:
+                                            self._octagon_dict[crystal_weight][v][w].append(i)
+                                        if j not in self._octagon_dict[crystal_weight][v][w]:
+                                            self._octagon_dict[crystal_weight][v][w].append(j)
+                                #or at least if they sit on a rank 2 face of the crystal 
+                                #(closure at the opposite end is not currently checked)
+                                elif (has_roof or has_floor) and w != v:
+                                    if v not in self._roof_dict[crystal_weight]:
+                                        self._roof_dict[crystal_weight][v] = dict()
+                                    if w not in self._roof_dict[crystal_weight][v]:
+                                        self._roof_dict[crystal_weight][v][w] = [(i, j)]
+                                    else:
+                                        self._roof_dict[crystal_weight][v][w].append((i, j))
+
+
+    def find_long_jumps(self, crystal):
+        #sometimes jumps are allowed across consecutive octagons
+        crystal_weight = crystal.module_generators[0].weight()
+        if crystal_weight not in self._octagon_dict:
+            self.find_octagons(crystal)
+
+        if crystal_weight not in self._jump_dict:
+            self._jump_dict[crystal_weight] = dict()
+        for v in self._octagon_dict[crystal_weight]:
+            if v in self._octagon_dict[crystal_weight][v]:
+                for w in self._octagon_dict[crystal_weight][v]:
+                    if w != v and w in self._octagon_dict[crystal_weight][w]:
+                        for i, j in self._octagon_dict[crystal_weight][v][w]:
+                            if i in self._octagon_dict[crystal_weight][v][v] and j in self._octagon_dict[crystal_weight][w][w]:
+                                for x in self._octagon_dict[crystal_weight][w]:
+                                    if x != w:
+                                        for k, l in self._octagon_dict[crystal_weight][w][x]:
+                                            if k in self._octagon_dict[crystal_weight][w][w] and k != j:
+                                                if v not in self._jump_dict[crystal_weight]:
+                                                    self._jump_dict[crystal_weight][v] = [(x, i, l)]
+                                                else:
+                                                    self._jump_dict[crystal_weight][v].append((x, i, l))
 
 
     def find_steps(self, crystal):
         crystal_weight = crystal.module_generators[0].weight()
-        if crystal_weight not in self._crystal_weight_dict:
-            self.find_repeated_weights(crystal)
+        if crystal_weight not in self._jump_dict:
+            self.find_long_jumps(crystal)
 
         if crystal_weight not in self._step_dict:
             self._step_dict[crystal_weight] = dict()
@@ -45,7 +141,7 @@ class DoubleBruhatAlgebra(SageObject):
                     self._step_dict[crystal_weight][(v, '+', i)] = dict()
                 for r in range(v.epsilon(i) + 1):
                     next_node = v.e_string([i]*r)
-                    step_factor = binomial(v.phi(i)+r,r) * self._R.gens()[2*self._n+i]**r
+                    step_factor = binomial(v.phi(i)+r,r) * self._plus_gens[i]**r
                     if (i, r) not in self._step_dict[crystal_weight][(v, '+', i)]:
                         self._step_dict[crystal_weight][(v, '+', i)][(i,r)] = [(next_node, step_factor)]
                     else:
@@ -54,78 +150,188 @@ class DoubleBruhatAlgebra(SageObject):
                     self._step_dict[crystal_weight][(v, '-', i)] = dict()
                 for s in range(v.phi(i) + 1):
                     next_node = v.f_string([i]*s)
-                    step_factor = binomial(v.epsilon(i)+s,s) * self._R.gens()[self._n+i]**s
+                    step_factor = binomial(v.epsilon(i)+s,s) * self._minus_gens[i]**s
                     if (i, s) not in self._step_dict[crystal_weight][(v, '-', i)]:
                         self._step_dict[crystal_weight][(v, '-', i)][(i,s)] = [(next_node, step_factor)]
                     else:
                         self._step_dict[crystal_weight][(v, '-', i)][(i,s)].append((next_node, step_factor))
-            wt = v.weight()
-            if wt in self._crystal_weight_dict[crystal_weight]:
-                for w in self._crystal_weight_dict[crystal_weight][wt]:
+            #record short jump steps inside the crystal coming from octagons
+            if v in self._octagon_dict[crystal_weight]:
+                for w in self._octagon_dict[crystal_weight][v]:
                     if w != v:
-                        #compute jump steps inside the crystal`
-                        for i in range(self._n):
-                            for j in range(self._n):
-                                if v.epsilon(i) != 0 and v.phi(i) != 0 and w.epsilon(j) != 0 and w.phi(j) != 0:
-                                    post_v = v.e(i)
-                                    #post_v = v.e_string([i]*v.epsilon(i))
-                                    pre_v = v.f(i)
-                                    #pre_v = v.f_string([i]*v.phi(i))
-                                    post_w = w.e(j)
-                                    #post_w = w.e_string([j]*w.epsilon(j))
-                                    pre_w = w.f(j)
-                                    #pre_w = w.f_string([j]*w.phi(j))
-                                    has_roof = False
-                                    if  pre_w.phi(i) != 0 and pre_v.phi(j) != 0:
-                                        coeff = pre_v.phi(j) * self._R.gens()[2*self._n+i] * self._R.gens()[2*self._n+j]
-                                        for r in range(pre_w.phi(i)):
-                                            for s in range(pre_v.phi(j)):
-                                                if pre_w.f_string([i]*(r+1)) == pre_v.f_string([j]*(s+1)):
-                                                    has_roof = True
-                                                    if (pre_v, '+', i) not in self._step_dict[crystal_weight]:
-                                                        self._step_dict[crystal_weight][(pre_v, '+', i)] = dict()
-                                                    key = (j, w.epsilon(j))
-                                                    if key not in self._step_dict[crystal_weight][(pre_v, '+', i)]:
-                                                        self._step_dict[crystal_weight][(pre_v, '+', i)][key] = [(post_w, coeff)]
+                        for i, j in self._octagon_dict[crystal_weight][v][w]:
+                            #alpha strings may extend beyond the boundary of the octagon
+                            for r in range(1, v.epsilon(i) + 1):
+                                for s in range(1, w.phi(j) + 1):
+                                    post_v = v.e_string([i]*r)
+                                    pre_w = w.f_string([j]*s)
+                                    coeff = self._minus_gens[i]**r * self._minus_gens[j]**s * post_v.epsilon(j)
+                                    if (post_v, '-', i) not in self._step_dict[crystal_weight]:
+                                        self._step_dict[crystal_weight][(post_v, '-', i)] = dict()
+                                    if (j, s) not in self._step_dict[crystal_weight][(post_v, '-', i)]:
+                                        self._step_dict[crystal_weight][(post_v, '-', i)][(j, s)] = [(pre_w, coeff)]
+                                    else:
+                                        self._step_dict[crystal_weight][(post_v, '-', i)][(j, s)].append((pre_w, coeff))
+
+                            for r in range(1, v.phi(i) + 1):
+                                for s in range(1, w.epsilon(j) + 1):
+                                    pre_v = v.f_string([i]*r)
+                                    post_w = w.e_string([j]*s)
+                                    coeff = self._plus_gens[i]**r * self._plus_gens[j]**s * pre_v.phi(j)
+                                    if (pre_v, '+', i) not in self._step_dict[crystal_weight]:
+                                        self._step_dict[crystal_weight][(pre_v, '+', i)] = dict()
+                                    if (j, s) not in self._step_dict[crystal_weight][(pre_v, '+', i)]:
+                                        self._step_dict[crystal_weight][(pre_v, '+', i)][(j, s)] = [(post_w, coeff)]
+                                    else:
+                                        self._step_dict[crystal_weight][(pre_v, '+', i)][(j, s)].append((post_w, coeff))
+
+                            #steps can jump across the octagon even if they are not involved in the formation of this rank 2 face 
+                            for k in range(self._n):
+                                if k != i and k != j:
+                                    if v.f(k) != None or w.e(k) != None:
+                                        for r in range(v.phi(k) + 1):
+                                            for s in range(w.epsilon(k) + 1):
+                                                if r + s != 0:
+                                                    prev_node = v.f_string([k]*r)
+                                                    next_node = w.e_string([k]*s)
+                                                    coeff = binomial(prev_node.phi(k)+r+s, r+s) * self._plus_gens[k]**(r+s)
+                                                    if (prev_node, '+', k) not in self._step_dict[crystal_weight]:
+                                                        self._step_dict[crystal_weight][(prev_node, '+', k)] = dict()
+                                                    if (k, r+s) not in self._step_dict[crystal_weight][(prev_node, '+', k)]:
+                                                        self._step_dict[crystal_weight][(prev_node, '+', k)][(k, r+s)] = [(next_node, coeff)]
                                                     else:
-                                                        self._step_dict[crystal_weight][(pre_v, '+', i)][key].append((post_w, coeff))
-                                    if  post_w.epsilon(i) != 0 and post_v.epsilon(j) != 0:
-                                        coeff = post_v.epsilon(j) * self._R.gens()[self._n+i] * self._R.gens()[self._n+j]
-                                        for r in range(post_w.epsilon(i)):
-                                            for s in range(post_v.epsilon(j)):
-                                                if post_w.e_string([i]*(r+1)) == post_v.e_string([j]*(s+1)):
-                                                    has_roof = True
-                                                    if (post_v, '-', i) not in self._step_dict[crystal_weight]:
-                                                        self._step_dict[crystal_weight][(post_v, '-', i)] = dict()
-                                                    key = (j, w.phi(j))
-                                                    if key not in self._step_dict[crystal_weight][(post_v, '-', i)]:
-                                                        self._step_dict[crystal_weight][(post_v, '-', i)][key] = [(pre_w, coeff)]
+                                                        self._step_dict[crystal_weight][(prev_node, '+', k)][(k, r+s)].append((next_node, coeff))
+                                                    coeff = binomial(next_node.epsilon(k)+r+s, r+s) * self._minus_gens[k]**(r+s)
+                                                    if (next_node, '-', k) not in self._step_dict[crystal_weight]:
+                                                        self._step_dict[crystal_weight][(next_node, '-', k)] = dict()
+                                                    if (k, r+s) not in self._step_dict[crystal_weight][(next_node, '-', k)]:
+                                                        self._step_dict[crystal_weight][(next_node, '-', k)][(k, r+s)] = [(prev_node, coeff)]
                                                     else:
-                                                        self._step_dict[crystal_weight][(post_v, '-', i)][key].append((pre_w, coeff))
-                                    if has_roof:
-                                        #parallel steps may be possible
-                                        for k in range(self._n):
-                                            if k != i and k != j:
-                                                if v.phi(k) != 0 or w.epsilon(k) != 0:
-                                                    for r in range(v.phi(k) + 1):
-                                                        for s in range(w.epsilon(k) + 1):
-                                                            if r + s != 0:
-                                                                prev_node = v.f_string([k]*r)
-                                                                next_node = w.e_string([k]*s)
-                                                                coeff = binomial(prev_node.phi(k)+r+s, r+s) * self._R.gens()[2*self._n+k]**(r+s)
-                                                                if (prev_node, '+', k) not in self._step_dict[crystal_weight]:
-                                                                    self._step_dict[crystal_weight][(prev_node, '+', k)] = dict()
-                                                                if (k, r+s) not in self._step_dict[crystal_weight][(prev_node, '+', k)]:
-                                                                    self._step_dict[crystal_weight][(prev_node, '+', k)][(k, r+s)] = [(next_node, coeff)]
-                                                                else:
-                                                                    self._step_dict[crystal_weight][(prev_node, '+', k)][(k, r+s)].append((next_node, coeff))
-                                                                coeff = binomial(next_node.epsilon(k)+r+s, r+s) * self._R.gens()[self._n+k]**(r+s)
-                                                                if (next_node, '-', k) not in self._step_dict[crystal_weight]:
-                                                                    self._step_dict[crystal_weight][(next_node, '-', k)] = dict()
-                                                                if (k, r+s) not in self._step_dict[crystal_weight][(next_node, '-', k)]:
-                                                                    self._step_dict[crystal_weight][(next_node, '-', k)][(k, r+s)] = [(prev_node, coeff)]
-                                                                else:
-                                                                    self._step_dict[crystal_weight][(next_node, '-', k)][(k, r+s)].append((prev_node, coeff))
+                                                        self._step_dict[crystal_weight][(next_node, '-', k)][(k, r+s)].append((prev_node, coeff))
+
+            #compute jump steps inside the crystal coming from larger rank 2 faces
+            if v in self._roof_dict[crystal_weight]:
+                for w in self._roof_dict[crystal_weight][v]:
+                    for i, j in self._roof_dict[crystal_weight][v][w]:
+                        for r in range(1, v.epsilon(i) + 1):
+                            for s in range(1, w.phi(j) + 1):
+                                post_v = v.e_string([i]*r)
+                                pre_w = w.f_string([j]*s)
+                                coeff = self._minus_gens[i]**r * self._minus_gens[j]**s
+                                if (post_v, '-', i) not in self._step_dict[crystal_weight]:
+                                    self._step_dict[crystal_weight][(post_v, '-', i)] = dict()
+                                if (j, s) not in self._step_dict[crystal_weight][(post_v, '-', i)]:
+                                    self._step_dict[crystal_weight][(post_v, '-', i)][(j, s)] = [(pre_w, coeff)]
+                                else:
+                                    self._step_dict[crystal_weight][(post_v, '-', i)][(j, s)].append((pre_w, coeff))
+                        for r in range(1, v.phi(i) + 1):
+                            for s in range(1, w.epsilon(j) + 1):
+                                pre_v = v.f_string([i]*r)
+                                post_w = w.e_string([j]*s)
+                                coeff = self._plus_gens[i]**r * self._plus_gens[j]**s
+                                if (pre_v, '+', i) not in self._step_dict[crystal_weight]:
+                                    self._step_dict[crystal_weight][(pre_v, '+', i)] = dict()
+                                if (j, s) not in self._step_dict[crystal_weight][(pre_v, '+', i)]:
+                                    self._step_dict[crystal_weight][(pre_v, '+', i)][(j, s)] = [(post_w, coeff)]
+                                else:
+                                    self._step_dict[crystal_weight][(pre_v, '+', i)][(j, s)].append((post_w, coeff))
+                            for s in range(1, w.epsilon(i) + 1):
+                                pre_v = v.f_string([i]*r)
+                                post_w = w.e_string([i]*s)
+                                coeff = self._plus_gens[i]**(r+s)
+                                if (pre_v, '+', i) not in self._step_dict[crystal_weight]:
+                                    self._step_dict[crystal_weight][(pre_v, '+', i)] = dict()
+                                if (i, r+s) not in self._step_dict[crystal_weight][(pre_v, '+', i)]:
+                                    self._step_dict[crystal_weight][(pre_v, '+', i)][(i, r+s)] = [(post_w, coeff)]
+                                else:
+                                    self._step_dict[crystal_weight][(pre_v, '+', i)][(i, r+s)].append((post_w, coeff))
+                                coeff = self._minus_gens[i]**(r+s)
+                                if (post_w, '-', i) not in self._step_dict[crystal_weight]:
+                                    self._step_dict[crystal_weight][(post_w, '-', i)] = dict()
+                                if (i, r+s) not in self._step_dict[crystal_weight][(post_w, '-', i)]:
+                                    self._step_dict[crystal_weight][(post_w, '-', i)][(i, r+s)] = [(pre_v, coeff)]
+                                else:
+                                    self._step_dict[crystal_weight][(post_w, '-', i)][(i, r+s)].append((pre_v, coeff))
+#           else:
+#               wt = v.weight()
+#               if wt in self._crystal_weight_dict[crystal_weight]:
+#                   for w in self._crystal_weight_dict[crystal_weight][wt]:
+#                       if w != v:
+#                           for i in range(self._n):
+#                               for j in range(self._n):
+#                                   if (v.e_string([i,j]) != None and v.e_string([i,j]) == w.e_string([j,i]) and v.phi(i) > 1) or (v.f_string([i,j]) != None and v.f_string([i,j]) == w.f_string([j,i]) and v.epsilon(i) > 1):
+#                                       pre_v = v.f_string([i]*v.phi(i))
+#                                       post_w = w.e_string([j]*w.epsilon(j))
+#                                       coeff = self._plus_gens[i]**v.phi(i) * self._plus_gens[j]**w.epsilon(j)
+#                                       if (pre_v, '+', i) not in self._step_dict[crystal_weight]:
+#                                           self._step_dict[crystal_weight][(pre_v, '+', i)] = dict()
+#                                       if (j, w.epsilon(j)) not in self._step_dict[crystal_weight][(pre_v, '+', i)]:
+#                                           self._step_dict[crystal_weight][(pre_v, '+', i)][(j, w.epsilon(j))] = [(post_w, coeff)]
+#                                       else:
+#                                           self._step_dict[crystal_weight][(pre_v, '+', i)][(j, w.epsilon(j))].append((post_w, coeff))
+#                                       coeff = self._minus_gens[i]**v.phi(i) * self._minus_gens[j]**w.epsilon(j)
+#                                       if (post_w, '-', j) not in self._step_dict[crystal_weight]:
+#                                           self._step_dict[crystal_weight][(post_w, '-', j)] = dict()
+#                                       if (i, v.phi(i)) not in self._step_dict[crystal_weight][(post_w, '-', j)]:
+#                                           self._step_dict[crystal_weight][(post_w, '-', j)][(i, v.phi(i))] = [(pre_v, coeff)]
+#                                       else:
+#                                           self._step_dict[crystal_weight][(post_w, '-', j)][(i, v.phi(i))].append((pre_v, coeff))
+#                                       if has_roof:
+#                                           #parallel steps may be possible
+#                                           for k in range(self._n):
+#                                               if k != i and k != j:
+#                                                   if v.f(k) != None or w.e(k) != None:
+#                                                       for r in range(v.phi(k) + 1):
+#                                                           for s in range(w.epsilon(k) + 1):
+#                                                               if r + s != 0:
+#                                                                   prev_node = v.f_string([k]*r)
+#                                                                   next_node = w.e_string([k]*s)
+#                                                                   coeff = binomial(prev_node.phi(k)+r+s, r+s) * self._plus_gens[k]**(r+s)
+#                                                                   if (prev_node, '+', k) not in self._step_dict[crystal_weight]:
+#                                                                       self._step_dict[crystal_weight][(prev_node, '+', k)] = dict()
+#                                                                   if (k, r+s) not in self._step_dict[crystal_weight][(prev_node, '+', k)]:
+#                                                                       self._step_dict[crystal_weight][(prev_node, '+', k)][(k, r+s)] = [(next_node, coeff)]
+#                                                                   else:
+#                                                                       self._step_dict[crystal_weight][(prev_node, '+', k)][(k, r+s)].append((next_node, coeff))
+#                                                                   coeff = binomial(next_node.epsilon(k)+r+s, r+s) * self._minus_gens[k]**(r+s)
+#                                                                   if (next_node, '-', k) not in self._step_dict[crystal_weight]:
+#                                                                       self._step_dict[crystal_weight][(next_node, '-', k)] = dict()
+#                                                                   if (k, r+s) not in self._step_dict[crystal_weight][(next_node, '-', k)]:
+#                                                                       self._step_dict[crystal_weight][(next_node, '-', k)][(k, r+s)] = [(prev_node, coeff)]
+#                                                                   else:
+#                                                                       self._step_dict[crystal_weight][(next_node, '-', k)][(k, r+s)].append((prev_node, coeff))
+
+            #record long jump steps inside the crystal coming from consecutive octagons
+            if v in self._jump_dict[crystal_weight]:
+                for w, i, j in self._jump_dict[crystal_weight][v]:
+                    if (v.f(i), '+', i) not in self._step_dict[crystal_weight]:
+                        self._step_dict[crystal_weight][(v.f(i), '+', i)] = dict()
+                    #coeff = self._R.gens()[self._n+i] * self._R.gens()[self._n+j]
+                    #if (j, 1) not in self._step_dict[crystal_weight][(v.e(i), '-', i)]:
+                    #    self._step_dict[crystal_weight][(v.e(i), '-', i)][(j, 1)] = [(w.f(j), coeff)]
+                    #else:
+                    #    self._step_dict[crystal_weight][(v.e(i), '-', i)][(j, 1)].append((w.f(j), coeff))
+                    #coeff = self._R.gens()[2*self._n+i] * self._R.gens()[2*self._n+j]
+                    #if (v.f(i), '+', i) not in self._step_dict[crystal_weight]:
+                    #    self._step_dict[crystal_weight][(v.f(i), '+', i)] = dict()
+                    #if (j, 1) not in self._step_dict[crystal_weight][(v.f(i), '+', i)]:
+                    #    self._step_dict[crystal_weight][(v.f(i), '+', i)][(j, 1)] = [(w.e(j), coeff)]
+                    #else:
+                    #    self._step_dict[crystal_weight][(v.f(i), '+', i)][(j, 1)].append((w.e(j), coeff))
+                    for k in range(self._n):
+                        if w.e(k) != None:
+                            coeff = self._plus_gens[i] * self._plus_gens[k]
+                            if (k,1) not in self._step_dict[crystal_weight][(v.f(i), '+', i)]:
+                                self._step_dict[crystal_weight][(v.f(i), '+', i)][(k, 1)] = [(w.e(k), coeff)]
+                            else:
+                                self._step_dict[crystal_weight][(v.f(i), '+', i)][(k, 1)].append((w.e(k), coeff))
+                            if (w.e(k), '-', k) not in self._step_dict[crystal_weight]:
+                                self._step_dict[crystal_weight][(w.e(k), '-', k)] = dict()
+                            coeff = self._minus_gens[i] * self._minus_gens[k]
+                            if (i,1) not in self._step_dict[crystal_weight][(w.e(k), '-', k)]:
+                                self._step_dict[crystal_weight][(w.e(k), '-', k)][(i, 1)] = [(v.f(i), coeff)]
+                            else:
+                                self._step_dict[crystal_weight][(w.e(k), '-', k)][(i, 1)].append((v.f(i), coeff))
 
 
     def find_repeated_weights(self, crystal):
@@ -163,7 +369,7 @@ class DoubleBruhatAlgebra(SageObject):
         wt = ls_path.weight()
 
         if cpt == 'h':
-            monomial = prod([ h**a for (h,a) in zip(self._R.gens()[:self._n],vector(wt))])
+            monomial = prod([ h**a for (h,a) in zip(self._h_gens,vector(wt))])
             new_edge = [(ls_path,ls_path,('','','','h',monomial))]
             return self._recursive_path_graph(g_pos-1, ls_path, crystal, G=G, path_so_far=path_so_far+new_edge)
 
