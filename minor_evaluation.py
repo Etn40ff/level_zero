@@ -29,6 +29,7 @@ class MinorEvaluation(SageObject):
 
     def minor(self, la, mu=None, element=None, crystal_generator=None):
         # WARNING: this function gives wrong answers precisely to the extent that crystals are not the same thing as representations
+
         if not element:
             element = self._g
 
@@ -36,25 +37,24 @@ class MinorEvaluation(SageObject):
         if not mu:
             mu = la
 
+        # sanitize input
         la = self._P.from_vector(vector(la))
         mu = self._P.from_vector(vector(mu))
 
-        if crystal_generator:
-            # NOTE TO SELF: here crystals.LSPaths builds the wrong crystal if crystal_generator is an element of self._P the same happens below with la. Is this a bug in sage?
-            # WORKAROUND: use vectors instead
-            # EXAMPLE:
-            # sage: C = CartanType(['A',2])
-            # sage: P = C.root_system().weight_space()
-            # sage: W = P.weyl_group()
-            # sage: la = P.from_vector(vector((1,0)))
-            # sage: la
-            # Lambda[1]
-            # sage: crystals.LSPaths(C,la)
-            # The crystal of LS paths of type ['A', 2] and weight Lambda[2]
-            crystal = crystals.LSPaths(self._C, vector(crystal_generator))
-        else:
-            dominant_wt = la.to_dominant_chamber() 
-            crystal = crystals.LSPaths(self._C, vector(dominant_wt))
+        if not crystal_generator:
+            crystal_generator = la.to_dominant_chamber()
+        # NOTE TO SELF: here crystals.LSPaths builds the wrong crystal if crystal_generator is an element of self._P. Is this a bug in sage?
+        # WORKAROUND: use vectors instead
+        # EXAMPLE:
+        # sage: C = CartanType(['A',2])
+        # sage: P = C.root_system().weight_space()
+        # sage: W = P.weyl_group()
+        # sage: la = P.from_vector(vector((1,0)))
+        # sage: la
+        # Lambda[1]
+        # sage: crystals.LSPaths(C,la)
+        # The crystal of LS paths of type ['A', 1] and weight Lambda[2]
+        crystal = crystals.LSPaths(self._C, vector(crystal_generator))
 
         # The following line assumes that la is a 1-dimensional weight space in the representation
         initial_path = [v for v in crystal if v.weight() == la][0]
@@ -63,10 +63,10 @@ class MinorEvaluation(SageObject):
             new_paths = []
             for (wt,mon) in paths:
                 if l in ['e','f']:
-                    d = getattr(wt, 'epsilon' if l == 'e' else 'phi')(i)
-                    m = getattr(wt, 'epsilon' if l == 'f' else 'phi')(i)
-                    for k in range(d+1):
-                        new_paths.append((wt,binomial(m+k,k)*mon*x**k))
+                    fwd = getattr(wt, 'epsilon' if l == 'e' else 'phi')(i)
+                    bwd = getattr(wt, 'epsilon' if l == 'f' else 'phi')(i)
+                    for k in range(fwd+1):
+                        new_paths.append((wt,binomial(bwd+k,k)*mon*x**k))
                         wt = getattr(wt, l)(i)
                 else: # l='h'
                     new_paths.append((wt,mon*x**wt.weight()[i]))
