@@ -62,14 +62,14 @@ class MinorEvaluation(SageObject):
         for (l,i,x) in reversed(self._g):
             new_paths = []
             for (wt,mon) in paths:
-                if l in ['e','f']:
+                if l == 'h':
+                    new_paths.append((wt,mon*x**wt.weight()[i]))
+                else: # l is either 'e' or 'f'
                     fwd = getattr(wt, 'epsilon' if l == 'e' else 'phi')(i)
                     bwd = getattr(wt, 'epsilon' if l == 'f' else 'phi')(i)
                     for k in range(fwd+1):
                         new_paths.append((wt,binomial(bwd+k,k)*mon*x**k))
                         wt = getattr(wt, l)(i)
-                else: # l='h'
-                    new_paths.append((wt,mon*x**wt.weight()[i]))
             paths = new_paths
         return sum([ mon for (wt,mon) in paths if wt.weight() == mu ])
                     
