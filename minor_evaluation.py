@@ -34,7 +34,7 @@ class MinorEvaluation(SageObject):
         if not element:
             element = self._g
 
-        # compute principal coefficients by default
+        # compute principal minors by default
         if not mu:
             mu = la
 
