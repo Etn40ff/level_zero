@@ -1,3 +1,5 @@
+from itertools import ifilter
+
 class MinorEvaluation(SageObject):
     
     def __init__(self, X, element=None):
@@ -56,8 +58,8 @@ class MinorEvaluation(SageObject):
         # The crystal of LS paths of type ['A', 1] and weight Lambda[2]
         crystal = crystals.LSPaths(self._C, vector(crystal_generator))
 
-        # The following line assumes that la is a 1-dimensional weight space in the representation
-        initial_path = [v for v in crystal if v.weight() == la][0]
+        # The following line assumes that la is a 1-dimensional weight space in the representation otherwise picks the first path of weight la
+        initial_path = ifilter(lambda v: v.weight() == la, crystal).next()
         paths = [(initial_path,1)]
         for (l,i,x) in reversed(self._g):
             new_paths = []
