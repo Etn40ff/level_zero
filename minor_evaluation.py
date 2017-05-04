@@ -46,7 +46,7 @@ class MinorEvaluation(SageObject):
             # this assumes that the representation is highest weight (because of how sage.combinat.crystals.crystals.CrystalBacktracker is implemented)
             crystal_generator = self._P.from_vector(vector(crystal_generator)).to_dominant_chamber()
             crystal = crystals.LSPaths(crystal_generator)
-            # this pick the first vertex of the crystal having weight la. The assumption is that there is only one such.
+            # this picks the first vertex of the crystal having weight la. The assumption is that there is only one such.
             initial_path = ifilter(lambda v: v.weight() == la, crystal).next()
         else: # by default compute minors in the cyclic irreducible representations having the required weight as extremal 
             crystal = crystals.LSPaths(la)
